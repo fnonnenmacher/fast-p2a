@@ -59,49 +59,50 @@ std::shared_ptr<arrow::RecordBatch> prepareRecordBatch(uint32_t num_strings, uin
 
   auto array = std::make_shared<arrow::StringArray>(num_strings, offsets, values);
 
-  auto schema_meta = metaMode(fletcher::Mode::WRITE);
-
-  std::shared_ptr<arrow::Schema> schema = arrow::schema({arrow::field("str", arrow::utf8(), false)}, schema_meta);
+//  This function no longer exists, not sure if passing meta data is necessary
+//  auto schema_meta = metaMode(fletcher::Mode::WRITE);
+  std::shared_ptr<arrow::Schema> schema = arrow::schema({arrow::field("str", arrow::utf8(), false)});//, schema_meta);
 
   auto rb = arrow::RecordBatch::Make(schema, num_strings, {array});
 
   return rb;
 }
 
+
 void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val, uint64_t max_size, da_t device_parquet_address, da_t device_arrow_offsets_address, da_t device_arrow_values_address) {
   dau_t mmio64_writer;
 
-  platform->writeMMIO(2, num_val);
+  platform->WriteMMIO(2, num_val);
 
   mmio64_writer.full = device_parquet_address;
-  platform->writeMMIO(3, mmio64_writer.lo);
-  platform->writeMMIO(4, mmio64_writer.hi);
+  platform->WriteMMIO(3, mmio64_writer.lo);
+  platform->WriteMMIO(4, mmio64_writer.hi);
   
   mmio64_writer.full = max_size;
-  platform->writeMMIO(5, mmio64_writer.lo);
-  platform->writeMMIO(6, mmio64_writer.hi);
+  platform->WriteMMIO(5, mmio64_writer.lo);
+  platform->WriteMMIO(6, mmio64_writer.hi);
   
   mmio64_writer.full = device_arrow_values_address;
-  platform->writeMMIO(7, mmio64_writer.lo);
-  platform->writeMMIO(8, mmio64_writer.hi);
+  platform->WriteMMIO(7, mmio64_writer.lo);
+  platform->WriteMMIO(8, mmio64_writer.hi);
   
   mmio64_writer.full = device_arrow_offsets_address;
-  platform->writeMMIO(9, mmio64_writer.lo);
-  platform->writeMMIO(10, mmio64_writer.hi);
+  platform->WriteMMIO(9, mmio64_writer.lo);
+  platform->WriteMMIO(10, mmio64_writer.hi);
 
   return;
 }
 
 //Use standard Arrow library functions to read Arrow array from Parquet file
 //Only works for Parquet version 1 style files.
-std::shared_ptr<arrow::Array> readArray(std::string hw_input_file_path) {
+std::shared_ptr<arrow::ChunkedArray> readArray(std::string hw_input_file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool(), &infile);
   
   std::unique_ptr<parquet::arrow::FileReader> reader;
   parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
 
-  std::shared_ptr<arrow::Array> array;
+  std::shared_ptr<arrow::ChunkedArray> array;
   reader->ReadColumn(0, &array);
 
   return array;
@@ -111,7 +112,7 @@ int main(int argc, char **argv) {
 
   std::shared_ptr<fletcher::Platform> platform;
   std::shared_ptr<fletcher::Context> context;
-  std::shared_ptr<fletcher::UserCore> usercore;
+  fletcher::Kernel kernel(context);
 
   fletcher::Timer t;
 
@@ -136,6 +137,8 @@ int main(int argc, char **argv) {
   * Parquet file reading
   *************************************************************/
 
+  t.start();
+
   //Open parquet file
   std::ifstream parquet_file;
   parquet_file.open(hw_input_file_path, std::ifstream::binary);
@@ -146,7 +149,8 @@ int main(int argc, char **argv) {
   }
 
   //Reference array
-  auto correct_array = std::dynamic_pointer_cast<arrow::StringArray>(readArray(std::string(reference_parquet_file_path)));
+  auto correct_array = std::dynamic_pointer_cast<arrow::StringArray>(readArray(
+		  std::string(reference_parquet_file_path))->chunk(0));
 
   // Get total amount of characters from string array for buffer allocation
   num_chars = correct_array->value_offset(num_strings);
@@ -173,32 +177,28 @@ int main(int argc, char **argv) {
             << t.seconds() << std::endl;
 
   /*************************************************************
-  * FPGA Initilialization
+  * FPGA Initialization
   *************************************************************/
 
   t.start();
-  // Create and intitialize platform
+  // Create and initialize platform
   fletcher::Platform::Make(&platform).ewf("Could not create platform.");
-  platform->init();
+  platform->Init();
 
   //Create context
   fletcher::Context::Make(&context, platform);
 
-  //Create usercore and reset CL
-  usercore = std::make_shared<fletcher::UserCore>(context);
-  usercore->reset();
-
   //Setup destination recordbatch on device
-  context->queueRecordBatch(arrow_rb_fpga);
-  context->enable();
+  context->QueueRecordBatch(arrow_rb_fpga);
+  context->Enable();
 
   //Malloc parquet file on device
   da_t device_parquet_address;
-  platform->deviceMalloc(&device_parquet_address, file_size);
+  platform->DeviceMalloc(&device_parquet_address, file_size);
 
   // Set all the MMIO registers to their correct value
   // Add 4 to device_parquet_address to skip magic number
-  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4, context->device_arrays[0]->buffers[0].device_address, context->device_arrays[0]->buffers[1].device_address);
+  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4, context->device_buffer(0).device_address, context->device_buffer(1).device_address);
   t.stop();
   std::cout << "FPGA Initialize                  : "
             << t.seconds() << std::endl;
@@ -208,7 +208,7 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   t.start();
-  platform->copyHostToDevice(file_data, device_parquet_address, file_size);
+  platform->CopyHostToDevice(file_data, device_parquet_address, file_size);
   t.stop();
   std::cout << "FPGA host to device copy         : "
             << t.seconds() << std::endl;
@@ -218,8 +218,8 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   t.start();
-  usercore->start();
-  usercore->waitForFinish(100);
+  kernel.Start();
+  kernel.WaitForFinish(100);
   t.stop();
   std::cout << "FPGA processing time             : "
             << t.seconds() << std::endl;
@@ -233,11 +233,11 @@ int main(int argc, char **argv) {
   auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
   auto result_buffer_raw_values = result_array->value_data()->mutable_data();
 
-  platform->copyDeviceToHost(context->device_arrays[0]->buffers[0].device_address,
+  platform->CopyDeviceToHost(context->device_buffer(0).device_address,
                              result_buffer_raw_offsets,
                              sizeof(int32_t) * (num_strings+1));
 
-  platform->copyDeviceToHost(context->device_arrays[0]->buffers[1].device_address,
+  platform->CopyDeviceToHost(context->device_buffer(2).device_address,
                              result_buffer_raw_values,
                              num_chars);
   t.stop();
@@ -280,3 +280,4 @@ int main(int argc, char **argv) {
   return 0;
 
 }
+
