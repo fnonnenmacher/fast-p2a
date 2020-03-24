@@ -66,8 +66,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <LemireBitUnpacking.h>
-#include <SWParquetReader.h>
+#include "LemireBitUnpacking.h"
+#include "SWParquetReader.h"
 
 using namespace std;
 

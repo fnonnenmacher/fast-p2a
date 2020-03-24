@@ -18,9 +18,9 @@
 #include <map>
 #include <cassert>
 
-#include <SWParquetReader.h>
-#include <LemireBitUnpacking.h>
-#include <ptoa.h>
+#include "SWParquetReader.h"
+#include "LemireBitUnpacking.h"
+#include "ptoa.h"
 
 namespace ptoa {
 

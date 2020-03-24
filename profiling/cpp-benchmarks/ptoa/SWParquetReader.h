@@ -20,7 +20,7 @@
 #include <parquet/properties.h>
 #include <parquet/types.h>
 
-#include <ptoa.h>
+#include "ptoa.h"
 
 #define BLOCK_SIZE 128
 #define MINIBLOCKS_IN_BLOCK 4

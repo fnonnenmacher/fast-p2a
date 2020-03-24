@@ -18,8 +18,8 @@
 #include <map>
 #include <bitset>
 
-#include <SWParquetReader.h>
-#include <ptoa.h>
+#include "SWParquetReader.h"
+#include "ptoa.h"
 
 namespace ptoa {
 
