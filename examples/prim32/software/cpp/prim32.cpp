@@ -55,31 +55,32 @@ std::shared_ptr<arrow::RecordBatch> prepareRecordBatch(uint32_t num_val) {
 
   auto array = std::make_shared<arrow::Int32Array>(arrow::int32(), num_val, values);
 
-  auto schema_meta = metaMode(fletcher::Mode::WRITE);
-
-  std::shared_ptr<arrow::Schema> schema = arrow::schema({arrow::field("int", arrow::int32(), false)}, schema_meta);
+  //  This function no longer exists, not sure if passing meta data is necessary
+  //  auto schema_meta = metaMode(fletcher::Mode::WRITE);
+    std::shared_ptr<arrow::Schema> schema = arrow::schema({arrow::field("int", arrow::int32(), false)});//, schema_meta);
 
   auto rb = arrow::RecordBatch::Make(schema, num_val, {array});
 
   return rb;
 }
 
-void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val, uint64_t max_size, da_t device_parquet_address, da_t device_arrow_address) {
+void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val,
+		uint64_t max_size, da_t device_parquet_address, da_t device_arrow_address) {
   dau_t mmio64_writer;
 
-  platform->writeMMIO(2, num_val);
+  platform->WriteMMIO(2, num_val);
 
   mmio64_writer.full = device_parquet_address;
-  platform->writeMMIO(3, mmio64_writer.lo);
-  platform->writeMMIO(4, mmio64_writer.hi);
+  platform->WriteMMIO(3, mmio64_writer.lo);
+  platform->WriteMMIO(4, mmio64_writer.hi);
   
   mmio64_writer.full = max_size;
-  platform->writeMMIO(5, mmio64_writer.lo);
-  platform->writeMMIO(6, mmio64_writer.hi);
+  platform->WriteMMIO(5, mmio64_writer.lo);
+  platform->WriteMMIO(6, mmio64_writer.hi);
   
   mmio64_writer.full = device_arrow_address;
-  platform->writeMMIO(7, mmio64_writer.lo);
-  platform->writeMMIO(8, mmio64_writer.hi);
+  platform->WriteMMIO(7, mmio64_writer.lo);
+  platform->WriteMMIO(8, mmio64_writer.hi);
 
   return;
 }
@@ -88,7 +89,7 @@ void checkMMIO(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val, u
   uint64_t value64;
   uint32_t value32;
 
-  platform->readMMIO(2, &value32);
+  platform->ReadMMIO(2, &value32);
 
   std::cout << "MMIO num_val=" << value32 << ", should be " << num_val << std::endl;
 
@@ -96,14 +97,14 @@ void checkMMIO(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val, u
 
 //Use standard Arrow library functions to read Arrow array from Parquet file
 //Only works for Parquet version 1 style files.
-std::shared_ptr<arrow::Array> readArray(std::string hw_input_file_path) {
+std::shared_ptr<arrow::ChunkedArray> readArray(std::string hw_input_file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool(), &infile);
   
   std::unique_ptr<parquet::arrow::FileReader> reader;
   parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
 
-  std::shared_ptr<arrow::Array> array;
+  std::shared_ptr<arrow::ChunkedArray> array;
   reader->ReadColumn(0, &array);
 
   return array;
@@ -111,9 +112,9 @@ std::shared_ptr<arrow::Array> readArray(std::string hw_input_file_path) {
 
 int main(int argc, char **argv) {
 
+  fletcher::Status status;
   std::shared_ptr<fletcher::Platform> platform;
   std::shared_ptr<fletcher::Context> context;
-  std::shared_ptr<fletcher::UserCore> usercore;
 
   fletcher::Timer t;
 
@@ -132,6 +133,33 @@ int main(int argc, char **argv) {
     std::cerr << "Usage: prim32 <parquet_hw_input_file_path> <reference_parquet_file_path> <num_values>" << std::endl;
     return 1;
   }
+
+  // Create a Fletcher platform object, attempting to autodetect the platform.
+  status = fletcher::Platform::Make(&platform, false);
+
+  if (!status.ok()) {
+	std::cerr << "Could not create Fletcher platform." << std::endl;
+	return -1;
+  }
+
+  // Initialize the platform.
+  status = platform->Init();
+
+  if (!status.ok()) {
+	std::cerr << "Could not create Fletcher platform." << std::endl;
+	return -1;
+  }
+
+  // Create a context for our application on the platform.
+  status = fletcher::Context::Make(&context, platform);
+
+  if (!status.ok()) {
+	std::cerr << "Could not create Fletcher context." << std::endl;
+	return -1;
+  }
+
+  fletcher::Kernel kernel(context);
+
 
   /*************************************************************
   * Parquet file reading
@@ -172,38 +200,38 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   t.start();
-  // Create and intitialize platform
-  fletcher::Platform::Make(&platform).ewf("Could not create platform.");
-  platform->init();
+   // Create and initialize platform
+   fletcher::Platform::Make(&platform).ewf("Could not create platform.");
+   platform->Init();
 
-  //Create context
-  fletcher::Context::Make(&context, platform);
+   //Create context
+   fletcher::Context::Make(&context, platform);
 
-  //Create usercore and reset CL
-  usercore = std::make_shared<fletcher::UserCore>(context);
-  usercore->reset();
-
-  //Setup destination recordbatch on device
-  context->queueRecordBatch(arrow_rb_fpga);
-  context->enable();
+   //Setup destination recordbatch on device
+   context->QueueRecordBatch(arrow_rb_fpga);
+   context->Enable();
 
   //Malloc parquet file on device
   da_t device_parquet_address;
-  platform->deviceMalloc(&device_parquet_address, file_size);
+  platform->DeviceMalloc(&device_parquet_address, file_size);
 
   // Set all the MMIO registers to their correct value
   // Add 4 to device_parquet_address to skip magic number
-  setPtoaArguments(platform, num_val, file_size, device_parquet_address+4, context->device_arrays[0]->buffers[0].device_address);
+  setPtoaArguments(platform, num_val, file_size, device_parquet_address+4,
+		  context->device_buffer(0).device_address);
   t.stop();
   std::cout << "FPGA Initialize                  : "
             << t.seconds() << std::endl;
+
+  checkMMIO(platform, num_val, file_size, device_parquet_address,
+		  context->device_buffer(0).device_address);
 
   /*************************************************************
   * FPGA host to device copy
   *************************************************************/
 
   t.start();
-  platform->copyHostToDevice(file_data, device_parquet_address, file_size);
+  platform->CopyHostToDevice(file_data, device_parquet_address, file_size);
   t.stop();
   std::cout << "FPGA host to device copy         : "
             << t.seconds() << std::endl;
@@ -213,8 +241,8 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   t.start();
-  usercore->start();
-  usercore->waitForFinish(100);
+  kernel.Start();
+  kernel.WaitForFinish(100);
   t.stop();
   std::cout << "FPGA processing time             : "
             << t.seconds() << std::endl;
@@ -226,7 +254,7 @@ int main(int argc, char **argv) {
   t.start();
   auto result_array = std::dynamic_pointer_cast<arrow::Int32Array>(arrow_rb_fpga->column(0));
   auto result_buffer_raw_data = result_array->values()->mutable_data();
-  platform->copyDeviceToHost(context->device_arrays[0]->buffers[0].device_address,
+  platform->CopyDeviceToHost(context->device_buffer(0).device_address,
                              result_buffer_raw_data,
                              sizeof(int32_t) * (num_val));
   t.stop();
@@ -242,11 +270,15 @@ int main(int argc, char **argv) {
   * Check results
   *************************************************************/
 
-  auto correct_array = std::dynamic_pointer_cast<arrow::Int32Array>(readArray(std::string(reference_parquet_file_path)));
+  auto correct_array = std::dynamic_pointer_cast<arrow::Int32Array>(readArray(
+		  std::string(reference_parquet_file_path))->chunk(0));
   int error_count = 0;
   for(int i=0; i<result_array->length(); i++) {
     if(result_array->Value(i) != correct_array->Value(i)) {
       error_count++;
+    }
+    if(i<20) {
+      std::cout << result_array->Value(i) << " " << correct_array->Value(i) << std::endl;
     }
 
   }
@@ -259,11 +291,6 @@ int main(int argc, char **argv) {
     std::cout << "Test passed!" << std::endl;
   } else {
     std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
-    std::cout << "First values: " << std::endl;
-
-    for(int i=0; i<20; i++) {
-      std::cout << result_array->Value(i) << " " << correct_array->Value(i) << std::endl;
-    }
   }
 
   std::free(file_data);

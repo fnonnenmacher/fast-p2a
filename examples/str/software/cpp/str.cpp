@@ -28,7 +28,7 @@
 
 #include <chrono>
 #include <memory>
-#include <vector>
+#include <array>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -73,7 +73,9 @@ std::shared_ptr<arrow::RecordBatch> prepareRecordBatch(uint32_t num_strings, uin
 }
 
 
-void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val, uint64_t max_size, da_t device_parquet_address, da_t device_arrow_offsets_address, da_t device_arrow_values_address) {
+void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val,
+		uint64_t max_size, da_t device_parquet_address, da_t device_arrow_offsets_address,
+		da_t device_arrow_values_address) {
   dau_t mmio64_writer;
 
   platform->WriteMMIO(2, num_val);
@@ -99,15 +101,36 @@ void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num
 
 //Use standard Arrow library functions to read Arrow array from Parquet file
 //Only works for Parquet version 1 style files.
-std::shared_ptr<arrow::ChunkedArray> readArray(std::string hw_input_file_path) {
+std::shared_ptr<arrow::ChunkedArray> readArray(std::string file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
-  arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool(), &infile);
+  arrow::Status status;
+  std::shared_ptr<arrow::ChunkedArray> array;
+  status = arrow::io::ReadableFile::Open(file_path, arrow::default_memory_pool(), &infile);
+  if (!status.ok()) {
+	  printf("Error opening Parquet file: code %d, errmsg %s\n",
+			  status.code(), status.message().c_str());
+	  exit(-1);
+  }
   
   std::unique_ptr<parquet::arrow::FileReader> reader;
   parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
+  if (!status.ok()) {
+	  printf("Error creating parquet arrow reader: code %d, errmsg %s\n",
+			  status.code(), status.message().c_str());
+	  exit(-1);
+  }
 
-  std::shared_ptr<arrow::ChunkedArray> array;
-  reader->ReadColumn(0, &array);
+  status = reader->ReadColumn(0, &array);
+  if (!status.ok()) {
+	  printf("Error reading column from parquet file: code %d, errmsg %s\n",
+			  status.code(), status.message().c_str());
+	  exit(-1);
+  }
+//  printf("array->num_chunks() %d\n", array->num_chunks());
+//  printf("array->length() %d\n", array->length());
+//  for (int i = 0; i < array->length(); i++) {
+//	  printf("array[%02d]: [%s]\n", i, std::dynamic_pointer_cast<arrow::StringArray>(array->chunk(0))->GetString(i).c_str());
+//  }
 
   return array;
 }
@@ -161,6 +184,7 @@ int main(int argc, char **argv) {
   }
 
   fletcher::Kernel kernel(context);
+
   /*************************************************************
   * Parquet file reading
   *************************************************************/
@@ -180,7 +204,9 @@ int main(int argc, char **argv) {
   auto correct_array = std::dynamic_pointer_cast<arrow::StringArray>(readArray(
 		  std::string(reference_parquet_file_path))->chunk(0));
 
-  // Get total amount of characters from string array for buffer allocation
+  if (correct_array->length() > num_strings)
+	  correct_array = std::dynamic_pointer_cast<arrow::StringArray>(
+			  correct_array->Slice(0, num_strings));
   num_chars = correct_array->value_offset(num_strings);
 
   //Get filesize
@@ -226,7 +252,8 @@ int main(int argc, char **argv) {
 
   // Set all the MMIO registers to their correct value
   // Add 4 to device_parquet_address to skip magic number
-  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4, context->device_buffer(0).device_address, context->device_buffer(1).device_address);
+  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4,
+		  context->device_buffer(0).device_address, context->device_buffer(1).device_address);
   t.stop();
   std::cout << "FPGA Initialize                  : "
             << t.seconds() << std::endl;
@@ -280,27 +307,28 @@ int main(int argc, char **argv) {
   /*************************************************************
   * Check results
   *************************************************************/
-  int error_count = 0;
-  for(int i=0; i<result_array->length(); i++) {
-    if(result_array->GetString(i).compare(correct_array->GetString(i)) != 0) {
-      error_count++;
-    }
-
-  }
 
   if(result_array->length() != num_strings){
-    error_count++;
-  }
-
-  if(error_count == 0) {
-    std::cout << "Test passed!" << std::endl;
+    std::cout << "Test failed. number of results differ.\n";
   } else {
-    std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
-    std::cout << "First values: " << std::endl;
 
-    for(int i=0; i<min(20, num_strings); i++) {
-      std::cout << result_array->GetString(i) << " " << correct_array->GetString(i) << std::endl;
-    }
+	  int error_count = 0;
+	  for(int i=0; i<result_array->length(); i++) {
+		if(result_array->GetString(i).compare(correct_array->GetString(i)) != 0) {
+		  error_count++;
+		}
+	  }
+
+	  if(error_count == 0) {
+		std::cout << "Test passed!" << std::endl;
+	  } else {
+		std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
+		std::cout << "First values: " << std::endl;
+
+		for(int i=0; i<min(20, num_strings); i++) {
+		  std::cout << result_array->GetString(i) << " " << correct_array->GetString(i) << std::endl;
+		}
+	  }
   }
 
   std::free(file_data);
