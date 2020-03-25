@@ -44,6 +44,10 @@
 // Fletcher
 #include "fletcher/api.h"
 
+int min(int a, int b) {
+	if (a < b) return a;
+	else return b;
+}
 
 std::shared_ptr<arrow::RecordBatch> prepareRecordBatch(uint32_t num_strings, uint32_t num_chars) {
   std::shared_ptr<arrow::Buffer> values;
@@ -109,10 +113,9 @@ std::shared_ptr<arrow::ChunkedArray> readArray(std::string hw_input_file_path) {
 }
 
 int main(int argc, char **argv) {
-
+  fletcher::Status status;
   std::shared_ptr<fletcher::Platform> platform;
   std::shared_ptr<fletcher::Context> context;
-  fletcher::Kernel kernel(context);
 
   fletcher::Timer t;
 
@@ -133,6 +136,31 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // Create a Fletcher platform object, attempting to autodetect the platform.
+  status = fletcher::Platform::Make(&platform, false);
+
+  if (!status.ok()) {
+	std::cerr << "Could not create Fletcher platform." << std::endl;
+	return -1;
+  }
+
+  // Initialize the platform.
+  status = platform->Init();
+
+  if (!status.ok()) {
+	std::cerr << "Could not create Fletcher platform." << std::endl;
+	return -1;
+  }
+
+  // Create a context for our application on the platform.
+  status = fletcher::Context::Make(&context, platform);
+
+  if (!status.ok()) {
+	std::cerr << "Could not create Fletcher context." << std::endl;
+	return -1;
+  }
+
+  fletcher::Kernel kernel(context);
   /*************************************************************
   * Parquet file reading
   *************************************************************/
@@ -237,7 +265,7 @@ int main(int argc, char **argv) {
                              result_buffer_raw_offsets,
                              sizeof(int32_t) * (num_strings+1));
 
-  platform->CopyDeviceToHost(context->device_buffer(2).device_address,
+  platform->CopyDeviceToHost(context->device_buffer(1).device_address,
                              result_buffer_raw_values,
                              num_chars);
   t.stop();
@@ -270,7 +298,7 @@ int main(int argc, char **argv) {
     std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
     std::cout << "First values: " << std::endl;
 
-    for(int i=0; i<20; i++) {
+    for(int i=0; i<min(20, num_strings); i++) {
       std::cout << result_array->GetString(i) << " " << correct_array->GetString(i) << std::endl;
     }
   }
