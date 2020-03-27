@@ -260,7 +260,7 @@ begin
                   if current_byte = x"15" then
                     page_header_state_next <= CRC;
                     field_state_next <= DATA;
-                  elsif current_byte = x"5c" then
+                  elsif current_byte = x"2c" then
                     page_header_state_next <= DATA_PAGE_HEADER;
                     field_state_next <= HEADER;
                   elsif current_byte = x"4c" then
@@ -322,47 +322,11 @@ begin
                       field_state_next <= DATA;
   
                       if current_byte = x"15" then
-                        data_page_header_state_next <= NUM_NULLS;
-                      else
-                        top_state_next <= FAULT;
-                      end if;
-                  end case; -- NUM_VALUES field_state
-
-                when NUM_NULLS =>
-                  -- We are not actually interested in the contents of this field
-                  case field_state is
-                    when DATA =>
-                      if current_byte(7) = '0' then -- Last byte of varint
-                        field_state_next <= HEADER;
-                      end if;
-
-                    when HEADER =>
-                      field_state_next <= DATA;
-  
-                      if current_byte = x"15" then
-                        data_page_header_state_next <= NUM_ROWS;
-                      else
-                        top_state_next <= FAULT;
-                      end if;
-                  end case; -- NUM_NULLS field_state
-
-                when NUM_ROWS =>
-                  -- We are not actually interested in the contents of this field
-                  case field_state is
-                    when DATA =>
-                      if current_byte(7) = '0' then -- Last byte of varint
-                        field_state_next <= HEADER;
-                      end if;
-
-                    when HEADER =>
-                      field_state_next <= DATA;
-  
-                      if current_byte = x"15" then
                         data_page_header_state_next <= ENCODING;
                       else
                         top_state_next <= FAULT;
                       end if;
-                  end case; -- NUM_ROWS field_state
+                  end case; -- NUM_VALUES field_state
 
                 when ENCODING =>
                   case field_state is
@@ -414,21 +378,16 @@ begin
   
                       if current_byte = x"00" then -- End of DataPageHeader struct
                         data_page_header_state_next <= DONE;
-                      elsif current_byte = x"11" or current_byte = x"12" then -- Optional IS_COMPRESSED field is present
-                        data_page_header_state_next <= IS_COMPRESSED;
-                        field_state_next <= HEADER;
-                      elsif current_byte = x"2c" then -- Optional STATISTICS field is present
+                      elsif current_byte = x"1c" then -- Optional STATISTICS field is present
                         data_page_header_state_next <= STATISTICS;
                       else
                         top_state_next <= FAULT;
                       end if;
                   end case; -- REP_LEVEL_ENCODING field_state
 
-                when IS_COMPRESSED =>
+                when STATISTICS => --not implemented, but supported if empty
                   if current_byte = x"00" then -- End of DataPageHeader struct
                     data_page_header_state_next <= DONE;
-                  elsif current_byte = x"1c" then
-                    data_page_header_state_next <= STATISTICS;
                   else
                     top_state_next <= FAULT;
                   end if;

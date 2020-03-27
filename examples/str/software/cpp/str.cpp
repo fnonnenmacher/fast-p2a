@@ -44,6 +44,8 @@
 // Fletcher
 #include "fletcher/api.h"
 
+#define REG_BASE 10
+
 int min(int a, int b) {
 	if (a < b) return a;
 	else return b;
@@ -78,23 +80,24 @@ void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num
 		da_t device_arrow_values_address) {
   dau_t mmio64_writer;
 
-  platform->WriteMMIO(2, num_val);
+  platform->WriteMMIO(REG_BASE + 0, num_val);
 
   mmio64_writer.full = device_parquet_address;
-  platform->WriteMMIO(3, mmio64_writer.lo);
-  platform->WriteMMIO(4, mmio64_writer.hi);
+  platform->WriteMMIO(REG_BASE + 1, mmio64_writer.lo);
+  platform->WriteMMIO(REG_BASE + 2, mmio64_writer.hi);
   
   mmio64_writer.full = max_size;
-  platform->WriteMMIO(5, mmio64_writer.lo);
-  platform->WriteMMIO(6, mmio64_writer.hi);
+  platform->WriteMMIO(REG_BASE + 3, mmio64_writer.lo);
+  platform->WriteMMIO(REG_BASE + 4, mmio64_writer.hi);
   
-  mmio64_writer.full = device_arrow_values_address;
-  platform->WriteMMIO(7, mmio64_writer.lo);
-  platform->WriteMMIO(8, mmio64_writer.hi);
-  
-  mmio64_writer.full = device_arrow_offsets_address;
-  platform->WriteMMIO(9, mmio64_writer.lo);
-  platform->WriteMMIO(10, mmio64_writer.hi);
+//  Device buffers are automatically set up by queuing the output rb
+//  mmio64_writer.full = device_arrow_values_address;
+//  platform->WriteMMIO(REG_BASE + 5, mmio64_writer.lo);
+//  platform->WriteMMIO(REG_BASE + 6, mmio64_writer.hi);
+//
+//  mmio64_writer.full = device_arrow_offsets_address;
+//  platform->WriteMMIO(REG_BASE + 7, mmio64_writer.lo);
+//  platform->WriteMMIO(REG_BASE + 8, mmio64_writer.hi);
 
   return;
 }

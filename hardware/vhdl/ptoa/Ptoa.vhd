@@ -28,7 +28,6 @@ package Ptoa is
     generic(
       BUS_ADDR_WIDTH                             : natural;
       BUS_DATA_WIDTH                             : natural;
-      BUS_STROBE_WIDTH                           : natural;
       BUS_LEN_WIDTH                              : natural;
       BUS_BURST_STEP_LEN                         : natural;
       BUS_BURST_MAX_LEN                          : natural;
@@ -62,7 +61,7 @@ package Ptoa is
       bus_wdat_valid                             : out std_logic;
       bus_wdat_ready                             : in  std_logic;
       bus_wdat_data                              : out std_logic_vector(BUS_DATA_WIDTH-1 downto 0);
-      bus_wdat_strobe                            : out std_logic_vector(BUS_STROBE_WIDTH-1 downto 0);
+      bus_wdat_strobe                            : out std_logic_vector(BUS_DATA_WIDTH/8-1 downto 0);
       bus_wdat_last                              : out std_logic;
       ---------------------------------------------------------------------------
       base_pages_ptr                             : in  std_logic_vector(BUS_ADDR_WIDTH-1 downto 0);

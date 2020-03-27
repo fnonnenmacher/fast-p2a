@@ -42,7 +42,6 @@ entity ParquetReader is
   generic(
     BUS_ADDR_WIDTH                             : natural;
     BUS_DATA_WIDTH                             : natural;
-    BUS_STROBE_WIDTH                           : natural;
     BUS_LEN_WIDTH                              : natural;
     BUS_BURST_STEP_LEN                         : natural;
     BUS_BURST_MAX_LEN                          : natural;
@@ -76,7 +75,7 @@ entity ParquetReader is
     bus_wdat_valid                             : out std_logic;
     bus_wdat_ready                             : in  std_logic;
     bus_wdat_data                              : out std_logic_vector(BUS_DATA_WIDTH-1 downto 0);
-    bus_wdat_strobe                            : out std_logic_vector(BUS_STROBE_WIDTH-1 downto 0);
+    bus_wdat_strobe                            : out std_logic_vector(BUS_DATA_WIDTH/8-1 downto 0);
     bus_wdat_last                              : out std_logic;
     ---------------------------------------------------------------------------
     -- Pointer to the first page in a contiguous list of Parquet pages in memory
@@ -290,7 +289,6 @@ begin
       BUS_ADDR_WIDTH              => BUS_ADDR_WIDTH,
       BUS_LEN_WIDTH               => BUS_LEN_WIDTH,
       BUS_DATA_WIDTH              => BUS_DATA_WIDTH,
-      BUS_STROBE_WIDTH            => BUS_STROBE_WIDTH,
       BUS_BURST_STEP_LEN          => BUS_BURST_STEP_LEN,
       BUS_BURST_MAX_LEN           => BUS_BURST_MAX_LEN,
       INDEX_WIDTH                 => INDEX_WIDTH,

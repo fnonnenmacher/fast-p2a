@@ -26,19 +26,18 @@ use work.Axi_pkg.all;
 -- Requires an AXI4 port to host memory.
 -- Requires an AXI4-lite port from host for MMIO.
 -------------------------------------------------------------------------------
-entity axi_top is
+entity AxiTop is
   generic (
     -- Host bus properties
     BUS_ADDR_WIDTH              : natural := 64;
     BUS_DATA_WIDTH              : natural := 512;
-    BUS_STROBE_WIDTH            : natural := 64;
     BUS_LEN_WIDTH               : natural := 8;
     BUS_BURST_MAX_LEN           : natural := 64;
     BUS_BURST_STEP_LEN          : natural := 1;
     
     -- MMIO bus properties
-    SLV_BUS_ADDR_WIDTH          : natural := 32;
-    SLV_BUS_DATA_WIDTH          : natural := 32;
+    MMIO_ADDR_WIDTH          : natural := 32;
+    MMIO_DATA_WIDTH          : natural := 32;
   
     -- Arrow properties
     INDEX_WIDTH                 : natural := 32;
@@ -46,15 +45,15 @@ entity axi_top is
     -- Accelerator properties
     TAG_WIDTH                   : natural := 1;
     NUM_ARROW_BUFFERS           : natural := 1;
-    NUM_REGS                    : natural := 11;
-    REG_WIDTH                   : natural := SLV_BUS_DATA_WIDTH
+    NUM_REGS                    : natural := 15;
+    REG_WIDTH                   : natural := 32
   );
 
   port (
-    acc_clk                     : in  std_logic;
-    acc_reset                   : in  std_logic;
-    bus_clk                     : in  std_logic;
-    bus_reset_n                 : in  std_logic;
+    kcd_clk                     : in  std_logic;
+    kcd_reset                   : in  std_logic;
+    bcd_clk                     : in  std_logic;
+    bcd_reset                   : in  std_logic;
 
     ---------------------------------------------------------------------------
     -- AXI4 master as Host Memory Interface
@@ -93,13 +92,13 @@ entity axi_top is
     -- Write adress channel
     s_axi_awvalid               : in std_logic;
     s_axi_awready               : out std_logic;
-    s_axi_awaddr                : in std_logic_vector(SLV_BUS_ADDR_WIDTH-1 downto 0);
+    s_axi_awaddr                : in std_logic_vector(MMIO_ADDR_WIDTH-1 downto 0);
 
     -- Write data channel
     s_axi_wvalid                : in std_logic;
     s_axi_wready                : out std_logic;
-    s_axi_wdata                 : in std_logic_vector(SLV_BUS_DATA_WIDTH-1 downto 0);
-    s_axi_wstrb                 : in std_logic_vector((SLV_BUS_DATA_WIDTH/8)-1 downto 0);
+    s_axi_wdata                 : in std_logic_vector(MMIO_DATA_WIDTH-1 downto 0);
+    s_axi_wstrb                 : in std_logic_vector((MMIO_DATA_WIDTH/8)-1 downto 0);
 
     -- Write response channel
     s_axi_bvalid                : out std_logic;
@@ -109,17 +108,17 @@ entity axi_top is
     -- Read address channel
     s_axi_arvalid               : in std_logic;
     s_axi_arready               : out std_logic;
-    s_axi_araddr                : in std_logic_vector(SLV_BUS_ADDR_WIDTH-1 downto 0);
+    s_axi_araddr                : in std_logic_vector(MMIO_ADDR_WIDTH-1 downto 0);
 
     -- Read data channel
     s_axi_rvalid                : out std_logic;
     s_axi_rready                : in std_logic;
-    s_axi_rdata                 : out std_logic_vector(SLV_BUS_DATA_WIDTH-1 downto 0);
+    s_axi_rdata                 : out std_logic_vector(MMIO_DATA_WIDTH-1 downto 0);
     s_axi_rresp                 : out std_logic_vector(1 downto 0)
   );
-end axi_top;
+end AxiTop;
 
-architecture Behavorial of axi_top is
+architecture Behavorial of AxiTop is
 
   -----------------------------------------------------------------------------
   -- Default wrapper component.
@@ -128,7 +127,6 @@ architecture Behavorial of axi_top is
     generic(
       BUS_DATA_WIDTH            : natural;
       BUS_ADDR_WIDTH            : natural;
-      BUS_STROBE_WIDTH          : natural;
       BUS_LEN_WIDTH             : natural;
       BUS_BURST_STEP_LEN        : natural;
       BUS_BURST_MAX_LEN         : natural;
@@ -158,7 +156,7 @@ architecture Behavorial of axi_top is
       mst_wdat_valid            : out std_logic;
       mst_wdat_ready            : in std_logic;
       mst_wdat_data             : out std_logic_vector(BUS_DATA_WIDTH-1 downto 0);
-      mst_wdat_strobe           : out std_logic_vector(BUS_STROBE_WIDTH-1 downto 0);
+      mst_wdat_strobe           : out std_logic_vector(BUS_DATA_WIDTH/8-1 downto 0);
       mst_wdat_last             : out std_logic;
       regs_in                   : in std_logic_vector(NUM_REGS*REG_WIDTH-1 downto 0);
       regs_out                  : out std_logic_vector(NUM_REGS*REG_WIDTH-1 downto 0);
@@ -168,7 +166,7 @@ architecture Behavorial of axi_top is
   -----------------------------------------------------------------------------
 
   -- Fletcher bus signals
-  signal bus_reset              : std_logic;
+  signal bcd_reset_n            : std_logic;
 
   signal bus_rreq_addr          : std_logic_vector(BUS_ADDR_WIDTH-1 downto 0);
   signal bus_rreq_len           : std_logic_vector(BUS_LEN_WIDTH-1 downto 0);
@@ -188,7 +186,7 @@ architecture Behavorial of axi_top is
   signal bus_wdat_valid         : std_logic;
   signal bus_wdat_ready         : std_logic;
   signal bus_wdat_data          : std_logic_vector(BUS_DATA_WIDTH-1 downto 0);
-  signal bus_wdat_strobe        : std_logic_vector(BUS_STROBE_WIDTH-1 downto 0);
+  signal bus_wdat_strobe        : std_logic_vector(BUS_DATA_WIDTH/8-1 downto 0);
   signal bus_wdat_last          : std_logic;
 
   -- MMIO registers
@@ -197,8 +195,8 @@ architecture Behavorial of axi_top is
   signal regs_out_en            : std_logic_vector(NUM_REGS-1 downto 0);
 begin
 
-  -- Active high reset
-  bus_reset <= '1' when bus_reset_n = '0' else '0';
+  -- Active low reset
+  bcd_reset_n <= '1' when bcd_reset = '0' else '0';
 
   -----------------------------------------------------------------------------
   -- Fletcher generated wrapper
@@ -207,7 +205,6 @@ begin
     generic map (
       BUS_DATA_WIDTH            => BUS_DATA_WIDTH,
       BUS_ADDR_WIDTH            => BUS_ADDR_WIDTH,
-      BUS_STROBE_WIDTH          => BUS_STROBE_WIDTH,
       BUS_LEN_WIDTH             => BUS_LEN_WIDTH,
       BUS_BURST_STEP_LEN        => BUS_BURST_STEP_LEN,
       BUS_BURST_MAX_LEN         => BUS_BURST_MAX_LEN,
@@ -218,10 +215,10 @@ begin
       TAG_WIDTH                 => TAG_WIDTH
     )
     port map (
-      acc_clk                   => acc_clk,
-      acc_reset                 => acc_reset,
-      bus_clk                   => bus_clk,
-      bus_reset                 => bus_reset,
+      acc_clk                   => kcd_clk,
+      acc_reset                 => kcd_reset,
+      bus_clk                   => bcd_clk,
+      bus_reset                 => bcd_reset,
       mst_rreq_valid            => bus_rreq_valid,
       mst_rreq_ready            => bus_rreq_ready,
       mst_rreq_addr             => bus_rreq_addr,
@@ -260,8 +257,8 @@ begin
       ENABLE_FIFO               => false
     )
     port map (
-      clk                       => bus_clk,
-      reset_n                   => bus_reset_n,
+      clk                       => bcd_clk,
+      reset_n                   => bcd_reset_n,
       slv_bus_rreq_addr         => bus_rreq_addr,
       slv_bus_rreq_len          => bus_rreq_len,
       slv_bus_rreq_valid        => bus_rreq_valid,
@@ -297,8 +294,8 @@ begin
       ENABLE_FIFO               => false
     )
     port map (
-      clk                       => bus_clk,
-      reset_n                   => bus_reset_n,
+      clk                       => bcd_clk,
+      reset_n                   => bcd_reset_n,
       slv_bus_wreq_addr         => bus_wreq_addr,
       slv_bus_wreq_len          => bus_wreq_len,
       slv_bus_wreq_valid        => bus_wreq_valid,
@@ -325,13 +322,13 @@ begin
   -----------------------------------------------------------------------------
   axi_mmio_inst : AxiMmio
     generic map (
-      BUS_ADDR_WIDTH            => SLV_BUS_ADDR_WIDTH,
-      BUS_DATA_WIDTH            => SLV_BUS_DATA_WIDTH,
+      BUS_ADDR_WIDTH            => MMIO_ADDR_WIDTH,
+      BUS_DATA_WIDTH            => MMIO_DATA_WIDTH,
       NUM_REGS                  => NUM_REGS
     )
     port map (
-      clk                       => bus_clk,
-      reset_n                   => bus_reset_n,
+      clk                       => bcd_clk,
+      reset_n                   => bcd_reset_n,
       s_axi_awvalid             => s_axi_awvalid,
       s_axi_awready             => s_axi_awready,
       s_axi_awaddr              => s_axi_awaddr,
