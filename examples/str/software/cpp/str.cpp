@@ -227,6 +227,16 @@ int main(int argc, char **argv) {
   context->Enable();
 
   //Malloc parquet file on device
+  if (strcmp("oc-accel", platform->name().c_str()) == 0
+		  || strcmp("snap", platform->name().c_str()) == 0) {
+    printf("Platform [%s]: Skipping device buffer allocation and host to device copy.\n",
+    		platform->name().c_str());
+    // Set all the MMIO registers to their correct value
+    // Add 4 to device_parquet_address to skip magic number
+    setPtoaArguments(platform, num_strings, file_size, (da_t)(file_data+4),
+        context->device_buffer(0).device_address, context->device_buffer(1).device_address);
+    t.stop();
+  } else {
   da_t device_parquet_address;
   platform->DeviceMalloc(&device_parquet_address, file_size);
 
@@ -247,6 +257,7 @@ int main(int argc, char **argv) {
   t.stop();
   std::cout << "FPGA host to device copy         : "
             << t.seconds() << std::endl;
+  }
 
   /*************************************************************
   * FPGA processing
@@ -263,19 +274,23 @@ int main(int argc, char **argv) {
   * FPGA device to host copy
   *************************************************************/
 
-  t.start();
   auto result_array = std::dynamic_pointer_cast<arrow::StringArray>(arrow_rb_fpga->column(0));
-  auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
-  auto result_buffer_raw_values = result_array->value_data()->mutable_data();
+  if (strcmp("oc-accel", platform->name().c_str()) == 0
+  		  || strcmp("snap", platform->name().c_str()) == 0) {
+      printf("Platform [%s]: Skipping device to host copy.\n", platform->name().c_str());
+  } else {
+		t.start();
+		auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
+		auto result_buffer_raw_values = result_array->value_data()->mutable_data();
 
-  platform->CopyDeviceToHost(context->device_buffer(0).device_address,
-                             result_buffer_raw_offsets,
-                             sizeof(int32_t) * (num_strings+1));
+		platform->CopyDeviceToHost(context->device_buffer(0).device_address,
+								 result_buffer_raw_offsets,
+								 sizeof(int32_t) * (num_strings+1));
 
-  platform->CopyDeviceToHost(context->device_buffer(1).device_address,
-                             result_buffer_raw_values,
-                             num_chars);
-  t.stop();
+		platform->CopyDeviceToHost(context->device_buffer(1).device_address,
+								 result_buffer_raw_values,
+								 num_chars);
+		t.stop();
 
   size_t total_arrow_size = sizeof(int32_t) * (num_strings+1) + num_chars;
 
@@ -283,6 +298,7 @@ int main(int argc, char **argv) {
             << t.seconds() << std::endl;
   std::cout << "Arrow buffers total size         : "
             << total_arrow_size << std::endl;
+  }
 
   /*************************************************************
   * Check results
