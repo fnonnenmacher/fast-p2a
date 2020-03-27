@@ -108,9 +108,10 @@ std::shared_ptr<arrow::ChunkedArray> readArray(std::string file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   arrow::Status status;
   std::shared_ptr<arrow::ChunkedArray> array;
+
   status = arrow::io::ReadableFile::Open(file_path, arrow::default_memory_pool(), &infile);
   if (!status.ok()) {
-	  printf("Error opening Parquet file: code %d, errmsg %s\n",
+	  printf("Error opening Parquet file: code %d, error message: %s\n",
 			  status.code(), status.message().c_str());
 	  exit(-1);
   }
@@ -118,22 +119,22 @@ std::shared_ptr<arrow::ChunkedArray> readArray(std::string file_path) {
   std::unique_ptr<parquet::arrow::FileReader> reader;
   parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
   if (!status.ok()) {
-	  printf("Error creating parquet arrow reader: code %d, errmsg %s\n",
+	  printf("Error creating parquet arrow reader: code %d, error message: %s\n",
 			  status.code(), status.message().c_str());
 	  exit(-1);
   }
 
   status = reader->ReadColumn(0, &array);
   if (!status.ok()) {
-	  printf("Error reading column from parquet file: code %d, errmsg %s\n",
+	  printf("Error reading column from parquet file: code %d, error message: %s\n",
 			  status.code(), status.message().c_str());
 	  exit(-1);
   }
-//  printf("array->num_chunks() %d\n", array->num_chunks());
-//  printf("array->length() %d\n", array->length());
-//  for (int i = 0; i < array->length(); i++) {
-//	  printf("array[%02d]: [%s]\n", i, std::dynamic_pointer_cast<arrow::StringArray>(array->chunk(0))->GetString(i).c_str());
-//  }
+  printf("array->num_chunks() %d\n", array->num_chunks());
+  printf("array->length() %d\n", array->length());
+  for (int i = 0; i < array->length(); i++) {
+	  printf("array[%02d]: [%s]\n", i, std::dynamic_pointer_cast<arrow::StringArray>(array->chunk(0))->GetString(i).c_str());
+  }
 
   return array;
 }
@@ -305,7 +306,7 @@ int main(int argc, char **argv) {
 		std::cout << "First values: " << std::endl;
 
 		for(int i=0; i<min(20, num_strings); i++) {
-		  std::cout << result_array->GetString(i) << " " << correct_array->GetString(i) << std::endl;
+		  printf("result_array(i): [%s], correct_array(i): [%s]\n", result_array->GetString(i).c_str(), correct_array->GetString(i).c_str());
 		}
 	  }
   }
