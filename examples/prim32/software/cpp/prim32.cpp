@@ -142,25 +142,6 @@ int main(int argc, char **argv) {
 	return -1;
   }
 
-  // Initialize the platform.
-  status = platform->Init();
-
-  if (!status.ok()) {
-	std::cerr << "Could not create Fletcher platform." << std::endl;
-	return -1;
-  }
-
-  // Create a context for our application on the platform.
-  status = fletcher::Context::Make(&context, platform);
-
-  if (!status.ok()) {
-	std::cerr << "Could not create Fletcher context." << std::endl;
-	return -1;
-  }
-
-  fletcher::Kernel kernel(context);
-
-
   /*************************************************************
   * Parquet file reading
   *************************************************************/
@@ -206,6 +187,8 @@ int main(int argc, char **argv) {
 
    //Create context
    fletcher::Context::Make(&context, platform);
+
+   fletcher::Kernel kernel(context);
 
    //Setup destination recordbatch on device
    context->QueueRecordBatch(arrow_rb_fpga);
