@@ -1,4 +1,3 @@
-
 -- Copyright 2018 Delft University of Technology
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +32,6 @@ entity ptoa_wrapper is
   generic(
     BUS_ADDR_WIDTH                             : natural;
     BUS_DATA_WIDTH                             : natural;
-    BUS_STROBE_WIDTH                           : natural;
     BUS_LEN_WIDTH                              : natural;
     BUS_BURST_STEP_LEN                         : natural;
     BUS_BURST_MAX_LEN                          : natural;
@@ -70,7 +68,7 @@ entity ptoa_wrapper is
     mst_wdat_valid                             : out std_logic;
     mst_wdat_ready                             : in std_logic;
     mst_wdat_data                              : out std_logic_vector(BUS_DATA_WIDTH-1 downto 0);
-    mst_wdat_strobe                            : out std_logic_vector(BUS_STROBE_WIDTH-1 downto 0);
+    mst_wdat_strobe                            : out std_logic_vector(BUS_DATA_WIDTH/8-1 downto 0);
     mst_wdat_last                              : out std_logic;
     ---------------------------------------------------------------------------
     regs_in                                    : in std_logic_vector(NUM_REGS*REG_WIDTH-1 downto 0);
@@ -85,15 +83,17 @@ architecture behv of ptoa_wrapper is
   ---------------------------------------
   constant REG_CONTROL                       : natural := 0;
   constant REG_STATUS                        : natural := 1;
-  constant REG_NUM_VAL                       : natural := 2;
-  constant REG_PAGE_ADDR0                    : natural := 3;
-  constant REG_PAGE_ADDR1                    : natural := 4;
-  constant REG_MAX_SIZE0                     : natural := 5;
-  constant REG_MAX_SIZE1                     : natural := 6;
-  constant REG_VAL_ADDR0                     : natural := 7;
-  constant REG_VAL_ADDR1                     : natural := 8;
-  constant REG_OFF_ADDR0                     : natural := 9;
-  constant REG_OFF_ADDR1                     : natural := 10;
+  --2 & 3 are return values, 4 and 5 are start and end indices
+  constant REG_VAL_ADDR0                     : natural := 6;
+  constant REG_VAL_ADDR1                     : natural := 7;
+  constant REG_OFF_ADDR0                     : natural := 8;
+  constant REG_OFF_ADDR1                     : natural := 9;
+  constant REG_NUM_VAL                       : natural := 10;
+  constant REG_PAGE_ADDR0                    : natural := 11;
+  constant REG_PAGE_ADDR1                    : natural := 12;
+  constant REG_MAX_SIZE0                     : natural := 13;
+  constant REG_MAX_SIZE1                     : natural := 14;
+
 
   ---------------------------------------
   -- Fletcher UserCoreController signals
@@ -123,7 +123,7 @@ architecture behv of ptoa_wrapper is
 
   signal bsv_wdat_valid                      : std_logic_vector(0 downto 0);
   signal bsv_wdat_last                       : std_logic_vector(0 downto 0);
-  signal bsv_wdat_strobe                     : std_logic_vector(BUS_STROBE_WIDTH-1 downto 0);
+  signal bsv_wdat_strobe                     : std_logic_vector(BUS_DATA_WIDTH/8-1 downto 0);
   signal bsv_wdat_data                       : std_logic_vector(BUS_DATA_WIDTH-1 downto 0);
   signal bsv_wdat_ready                      : std_logic_vector(0 downto 0);
 
@@ -172,7 +172,6 @@ begin
     generic map(
       BUS_ADDR_WIDTH                           => BUS_ADDR_WIDTH,
       BUS_DATA_WIDTH                           => BUS_DATA_WIDTH,
-      BUS_STROBE_WIDTH                         => BUS_STROBE_WIDTH,
       BUS_LEN_WIDTH                            => BUS_LEN_WIDTH,
       BUS_BURST_STEP_LEN                       => BUS_BURST_STEP_LEN,
       BUS_BURST_MAX_LEN                        => BUS_BURST_MAX_LEN,
@@ -222,7 +221,6 @@ begin
       BUS_ADDR_WIDTH                           => BUS_ADDR_WIDTH,
       BUS_LEN_WIDTH                            => BUS_LEN_WIDTH,
       BUS_DATA_WIDTH                           => BUS_DATA_WIDTH,
-      BUS_STROBE_WIDTH                         => BUS_STROBE_WIDTH,
       NUM_SLAVE_PORTS                          => 1,
       MAX_OUTSTANDING                          => 16
     )
