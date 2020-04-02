@@ -40,6 +40,7 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/reader.h>
+#include <parquet/arrow/writer.h>
 
 // Fletcher
 #include "fletcher/api.h"
@@ -76,8 +77,7 @@ std::shared_ptr<arrow::RecordBatch> prepareRecordBatch(uint32_t num_strings, uin
 
 
 void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val,
-		uint64_t max_size, da_t device_parquet_address, da_t device_arrow_offsets_address,
-		da_t device_arrow_values_address) {
+		uint64_t max_size, da_t device_parquet_address) {
   dau_t mmio64_writer;
 
   platform->WriteMMIO(REG_BASE + 0, num_val);
@@ -90,15 +90,6 @@ void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num
   platform->WriteMMIO(REG_BASE + 3, mmio64_writer.lo);
   platform->WriteMMIO(REG_BASE + 4, mmio64_writer.hi);
   
-//  Device buffers are automatically set up by queuing the output rb
-//  mmio64_writer.full = device_arrow_values_address;
-//  platform->WriteMMIO(REG_BASE + 5, mmio64_writer.lo);
-//  platform->WriteMMIO(REG_BASE + 6, mmio64_writer.hi);
-//
-//  mmio64_writer.full = device_arrow_offsets_address;
-//  platform->WriteMMIO(REG_BASE + 7, mmio64_writer.lo);
-//  platform->WriteMMIO(REG_BASE + 8, mmio64_writer.hi);
-
   return;
 }
 
@@ -233,8 +224,7 @@ int main(int argc, char **argv) {
     		platform->name().c_str());
     // Set all the MMIO registers to their correct value
     // Add 4 to device_parquet_address to skip magic number
-    setPtoaArguments(platform, num_strings, file_size, (da_t)(file_data+4),
-        context->device_buffer(0).device_address, context->device_buffer(1).device_address);
+    setPtoaArguments(platform, num_strings, file_size, (da_t)(file_data+4));
     t.stop();
   } else {
   da_t device_parquet_address;
@@ -242,8 +232,7 @@ int main(int argc, char **argv) {
 
   // Set all the MMIO registers to their correct value
   // Add 4 to device_parquet_address to skip magic number
-  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4,
-		  context->device_buffer(0).device_address, context->device_buffer(1).device_address);
+  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4);
   t.stop();
   std::cout << "FPGA Initialize                  : "
             << t.seconds() << std::endl;
@@ -263,6 +252,7 @@ int main(int argc, char **argv) {
   * FPGA processing
   *************************************************************/
 
+  kernel.Reset();
   t.start();
   kernel.Start();
   kernel.WaitForFinish(100);
@@ -275,22 +265,18 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   auto result_array = std::dynamic_pointer_cast<arrow::StringArray>(arrow_rb_fpga->column(0));
-  if (strcmp("oc-accel", platform->name().c_str()) == 0
-  		  || strcmp("snap", platform->name().c_str()) == 0) {
-      printf("Platform [%s]: Skipping device to host copy.\n", platform->name().c_str());
-  } else {
-		t.start();
-		auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
-		auto result_buffer_raw_values = result_array->value_data()->mutable_data();
+  t.start();
+  auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
+  auto result_buffer_raw_values = result_array->value_data()->mutable_data();
 
-		platform->CopyDeviceToHost(context->device_buffer(0).device_address,
-								 result_buffer_raw_offsets,
-								 sizeof(int32_t) * (num_strings+1));
+  platform->CopyDeviceToHost(context->device_buffer(0).device_address,
+  						 result_buffer_raw_offsets,
+  						 sizeof(int32_t) * (num_strings+1));
 
-		platform->CopyDeviceToHost(context->device_buffer(1).device_address,
-								 result_buffer_raw_values,
-								 num_chars);
-		t.stop();
+  platform->CopyDeviceToHost(context->device_buffer(1).device_address,
+  						 result_buffer_raw_values,
+  						 num_chars);
+  t.stop();
 
   size_t total_arrow_size = sizeof(int32_t) * (num_strings+1) + num_chars;
 
@@ -298,33 +284,52 @@ int main(int argc, char **argv) {
             << t.seconds() << std::endl;
   std::cout << "Arrow buffers total size         : "
             << total_arrow_size << std::endl;
-  }
 
   /*************************************************************
   * Check results
   *************************************************************/
 
-  if(result_array->length() != num_strings){
-    std::cout << "Test failed. number of results differ.\n";
+  if (result_array->Equals(correct_array)) {
+	  std::cout << "Test passed!" << std::endl;
   } else {
-
-	  int error_count = 0;
-	  for(int i=0; i<result_array->length(); i++) {
-		if(result_array->GetString(i).compare(correct_array->GetString(i)) != 0) {
-		  error_count++;
-		}
+	  std::cout << "Test Failed!" << std::endl;
+	  std::cout << "offsets arrays:" << std::endl;
+	  std::cout << "correct array: ";
+	  for (int i = 0; i < correct_array->value_offsets()->size(); i++) {
+		  printf("%02x ", correct_array->value_offsets()->data()[i]);
 	  }
-
-	  if(error_count == 0) {
-		std::cout << "Test passed!" << std::endl;
-	  } else {
-		std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
-		std::cout << "First values: " << std::endl;
-
-		for(int i=0; i<min(20, num_strings); i++) {
-		  printf("result_array(i): [%s], correct_array(i): [%s]\n", result_array->GetString(i).c_str(), correct_array->GetString(i).c_str());
-		}
+	  std::cout << std::endl << "result array:  ";
+	  for (int i = 0; i < correct_array->value_offsets()->size(); i++) {
+		  printf("%02x ", result_array->value_offsets()->data()[i]);
 	  }
+	  std::cout << std::endl << "value arrays:" << std::endl;
+	  std::cout << "correct array: ";
+	  for (int i = 0; i < correct_array->value_data()->size(); i++) {
+		  printf("%02x ", correct_array->value_data()->data()[i]);
+	  }
+	  std::cout << std::endl << "result array:  ";
+	  for (int i = 0; i < correct_array->value_data()->size(); i++) {
+		  printf("%02x ", result_array->value_data()->data()[i]);
+	  }
+	  std::cout << std::endl;
+  }
+  if(result_array->length() != num_strings){
+    std::cout << "Number of results differ.\n";
+  }
+  int error_count = 0;
+  for(int i=0; i<result_array->length(); i++) {
+	if(result_array->GetString(i).compare(correct_array->GetString(i)) != 0) {
+	  error_count++;
+	}
+  }
+
+  if(error_count != 0) {
+	std::cout << "Found " << error_count << " errors in the output Arrow array" << std::endl;
+	std::cout << "First values: " << std::endl;
+
+	for(int i=0; i<min(20, num_strings); i++) {
+	  printf("result_array(i): [%s], correct_array(i): [%s]\n", result_array->GetString(i).c_str(), correct_array->GetString(i).c_str());
+	}
   }
 
   std::free(file_data);
