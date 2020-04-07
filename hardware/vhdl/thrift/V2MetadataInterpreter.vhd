@@ -380,17 +380,26 @@ begin
                         data_page_header_state_next <= DONE;
                       elsif current_byte = x"1c" then -- Optional STATISTICS field is present
                         data_page_header_state_next <= STATISTICS;
+                        field_state_next <= DATA;
                       else
                         top_state_next <= FAULT;
                       end if;
                   end case; -- REP_LEVEL_ENCODING field_state
 
-                when STATISTICS => --not implemented, but supported if empty
-                  if current_byte = x"00" then -- End of DataPageHeader struct
-                    data_page_header_state_next <= DONE;
-                  else
-                    top_state_next <= FAULT;
-                  end if;
+                when STATISTICS => --Ignore any data until the stop field
+                  case field_state is
+                    when DATA =>
+                      if current_byte = x"00" then -- End of Statistics struct
+                        field_state_next <= HEADER;
+                      end if;
+
+                    when HEADER =>
+                      if current_byte = x"00" then -- End of DataPageHeader struct
+                        data_page_header_state_next <= DONE;
+                      else
+                        top_state_next <= FAULT;
+                      end if;
+                  end case; -- REP_LEVEL_ENCODING field_state
 
                 when DONE =>
                   if current_byte = x"00" then -- End of PageHeader struct
