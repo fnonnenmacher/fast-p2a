@@ -231,6 +231,7 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   t.start();
+  kernel.Reset();
   kernel.Start();
   kernel.WaitForFinish(100);
   t.stop();
