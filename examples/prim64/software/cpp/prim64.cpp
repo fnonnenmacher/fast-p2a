@@ -40,9 +40,12 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/reader.h>
+#include <parquet/arrow/writer.h>
 
 // Fletcher
 #include "fletcher/api.h"
+
+#define REG_BASE 10
 
 #define PRIM_WIDTH 64
 
@@ -65,23 +68,19 @@ std::shared_ptr<arrow::RecordBatch> prepareRecordBatch(uint32_t num_val) {
 }
 
 void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val,
-		uint64_t max_size, da_t device_parquet_address, da_t device_arrow_address) {
+		uint64_t max_size, da_t device_parquet_address) {
   dau_t mmio64_writer;
 
-  platform->WriteMMIO(2, num_val);
+  platform->WriteMMIO(REG_BASE + 0, num_val);
 
   mmio64_writer.full = device_parquet_address;
-  platform->WriteMMIO(3, mmio64_writer.lo);
-  platform->WriteMMIO(4, mmio64_writer.hi);
+  platform->WriteMMIO(REG_BASE + 1, mmio64_writer.lo);
+  platform->WriteMMIO(REG_BASE + 2, mmio64_writer.hi);
   
   mmio64_writer.full = max_size;
-  platform->WriteMMIO(5, mmio64_writer.lo);
-  platform->WriteMMIO(6, mmio64_writer.hi);
+  platform->WriteMMIO(REG_BASE + 3, mmio64_writer.lo);
+  platform->WriteMMIO(REG_BASE + 4, mmio64_writer.hi);
   
-  mmio64_writer.full = device_arrow_address;
-  platform->WriteMMIO(7, mmio64_writer.lo);
-  platform->WriteMMIO(8, mmio64_writer.hi);
-
   return;
 }
 
@@ -166,7 +165,6 @@ int main(int argc, char **argv) {
   posix_memalign((void**)&file_data, 4096, file_size);
   parquet_file.read((char *)file_data, file_size);
 
-
   /*************************************************************
   * FPGA RecordBatch preparation
   *************************************************************/
@@ -196,29 +194,38 @@ int main(int argc, char **argv) {
    context->Enable();
 
   //Malloc parquet file on device
-  da_t device_parquet_address;
-  platform->DeviceMalloc(&device_parquet_address, file_size);
+   if (strcmp("oc-accel", platform->name().c_str()) == 0
+   		  || strcmp("snap", platform->name().c_str()) == 0) {
+       printf("Platform [%s]: Skipping device buffer allocation and host to device copy.\n",
+       		platform->name().c_str());
+       // Set all the MMIO registers to their correct value
+       // Add 4 to device_parquet_address to skip magic number
+       setPtoaArguments(platform, num_val, file_size, (da_t)(file_data+4));
+       t.stop();
+     } else {
+       da_t device_parquet_address;
+       platform->DeviceMalloc(&device_parquet_address, file_size);
 
-  // Set all the MMIO registers to their correct value
-  // Add 4 to device_parquet_address to skip magic number
-  setPtoaArguments(platform, num_val, file_size, device_parquet_address+4,
-		  context->device_buffer(0).device_address);
-  t.stop();
-  std::cout << "FPGA Initialize                  : "
-            << t.seconds() << std::endl;
+       // Set all the MMIO registers to their correct value
+       // Add 4 to device_parquet_address to skip magic number
+       setPtoaArguments(platform, num_val, file_size, device_parquet_address+4);
+       t.stop();
+       std::cout << "FPGA Initialize                  : "
+                 << t.seconds() << std::endl;
 
-  checkMMIO(platform, num_val, file_size, device_parquet_address,
-		  context->device_buffer(0).device_address);
+       checkMMIO(platform, num_val, file_size, device_parquet_address,
+     		  context->device_buffer(0).device_address);
 
-  /*************************************************************
-  * FPGA host to device copy
-  *************************************************************/
+       /*************************************************************
+       * FPGA host to device copy
+       *************************************************************/
 
-  t.start();
-  platform->CopyHostToDevice(file_data, device_parquet_address, file_size);
-  t.stop();
-  std::cout << "FPGA host to device copy         : "
-            << t.seconds() << std::endl;
+       t.start();
+       platform->CopyHostToDevice(file_data, device_parquet_address, file_size);
+       t.stop();
+       std::cout << "FPGA host to device copy         : "
+                 << t.seconds() << std::endl;
+     }
 
   /*************************************************************
   * FPGA processing
