@@ -25,10 +25,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_library(LIB_ARROW arrow)
 find_library(LIB_PARQUET parquet)
-find_library(LIB_PTOA NAMES "ptoa" "ptoa.a" PATHS "../debug/")
-
-include_directories("../src/ptoa")
-include_directories($ENV{PARQUETCPP_DIR})
 
 add_executable(parquetwriter_test "./parquetwriter_test.cc")
-target_link_libraries(parquetwriter_test ${LIB_PARQUET} ${LIB_ARROW} ${LIB_PTOA})
+target_link_libraries(parquetwriter_test ${LIB_PARQUET} ${LIB_ARROW})

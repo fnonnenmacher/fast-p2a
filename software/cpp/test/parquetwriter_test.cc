@@ -10,16 +10,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdlib.h>
+
+#include <arrow/array/builder_binary.h>
+#include <arrow/array/builder_primitive.h>
+#include <arrow/io/file.h>
+#include <arrow/memory_pool.h>
+#include <arrow/status.h>
+#include <arrow/table.h>
+#include <arrow/type.h>
+#include <arrow/util/compression.h>
+#include <parquet/arrow/writer.h>
+#include <parquet/properties.h>
+#include <parquet/types.h>
 #include <cstdlib>
-#include <string.h>
+#include <memory>
+#include <string>
 
-#include <arrow/api.h>
-#include <arrow/io/api.h>
-#include <parquet/thrift.h>
-
-#include "../src/ptoa/parquetwriter.h"
-#include "../src/ptoa/ptoa.h"
 
 std::string gen_random_string(const int length) {
     static const char alphanum[] =
@@ -36,10 +42,15 @@ std::string gen_random_string(const int length) {
     return result;
 }
 
-std::shared_ptr<arrow::Table> generate_int64_table(int num_values) {
+std::shared_ptr<arrow::Table> generate_int64_table(int num_values, bool sequential) {
     arrow::Int64Builder i64builder;
     for (int i = 0; i < num_values; i++) {
-        int number = rand();
+    	int number;
+        if (sequential) {
+        	number = i;
+        } else {
+        	number = rand();
+        }
         PARQUET_THROW_NOT_OK(i64builder.Append(number));
 
     }
@@ -50,6 +61,27 @@ std::shared_ptr<arrow::Table> generate_int64_table(int num_values) {
             {arrow::field("int", arrow::int64(), true)});
 
     return arrow::Table::Make(schema, {i64array});
+}
+
+std::shared_ptr<arrow::Table> generate_int32_table(int num_values, bool sequential) {
+    arrow::Int32Builder i32builder;
+    for (int i = 0; i < num_values; i++) {
+    	int number;
+    	if (sequential) {
+    		number = i;
+    	} else {
+    		number = rand();
+    	}
+        PARQUET_THROW_NOT_OK(i32builder.Append(number));
+
+    }
+    std::shared_ptr<arrow::Array> i32array;
+    PARQUET_THROW_NOT_OK(i32builder.Finish(&i32array));
+
+    std::shared_ptr<arrow::Schema> schema = arrow::schema(
+            {arrow::field("int", arrow::int32(), true)});
+
+    return arrow::Table::Make(schema, {i32array});
 }
 
 std::shared_ptr<arrow::Table> generate_str_table(int num_values, int min_length, int max_length) {
@@ -67,18 +99,43 @@ std::shared_ptr<arrow::Table> generate_str_table(int num_values, int min_length,
     return arrow::Table::Make(schema, {strarray});
 }
 
+void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
+	for (bool dict : { false, true }) {
+		std::shared_ptr<arrow::io::FileOutputStream> outfile;
+		arrow::io::FileOutputStream::Open(name + (dict ? "_dict.prq" : ".prq"),
+				arrow::default_memory_pool(), &outfile);
+		parquet::WriterProperties::Builder propbuilder =
+				parquet::WriterProperties::Builder{};
+		propbuilder.compression(arrow::Compression::type::UNCOMPRESSED)->encoding(
+				parquet::Encoding::type::PLAIN)->disable_statistics();
+		if (!dict) {
+			propbuilder.disable_dictionary();
+		}
+		std::shared_ptr<parquet::WriterProperties> writerproperties = propbuilder.build();
+		parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile,
+				10000, writerproperties);
+		outfile->Flush();
+		outfile->Close();
+	}
+}
+
 int main(int argc, char **argv) {
-  auto writer = std::make_shared<ptoa::ParquetWriter>();
+	std::shared_ptr<arrow::io::FileOutputStream> outfile;
+	  arrow::io::FileOutputStream::Open("test_int64_nodict.prq", arrow::default_memory_pool(), &outfile);
 
-  std::shared_ptr<arrow::Table> test_table = generate_int64_table(100);
+  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(100, false);
+  std::shared_ptr<arrow::Table> test_int64stable = generate_int64_table(100, true);
+  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(100, false);
+  std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(100, true);
+  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(100, 2, 128);
 
-  writer->write(test_table, "./test_nodict.prq");
+  write_parquet(test_int64stable, "./test_int64s");
+  write_parquet(test_int64rtable, "./test_int64r");
+  write_parquet(test_int32stable, "./test_int32s");
+  write_parquet(test_int32rtable, "./test_int32r");
+  write_parquet(test_strtable, "./test_str");
 
-  writer->enable_dictionary();
 
-  writer->write(test_table, "./test_yesdict.prq");
-
-  format::DictionaryPageHeader dict_page_header;
 
 
   return 0;
