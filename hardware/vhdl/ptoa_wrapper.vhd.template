@@ -84,17 +84,24 @@ architecture behv of ptoa_wrapper is
   ---------------------------------------
   constant REG_CONTROL                       : natural := 0;
   constant REG_STATUS                        : natural := 1;
-  --2 & 3 are return values, 4 and 5 are start and end indices
+
+  --2 & 3 are return values
+  --The following are schema-derived registers set by the fletcher runtime automatically, by queuing a recordbatch.
+  -- See FLETCHER_REG_SCHEMA 
+  constant REG_START_INDEX                   : natural := 4;
+  constant REG_END_INDEX                     : natural := 5;
   constant REG_VAL_ADDR0                     : natural := 6;
   constant REG_VAL_ADDR1                     : natural := 7;
   constant REG_OFF_ADDR0                     : natural := 8;
   constant REG_OFF_ADDR1                     : natural := 9;
+
+  --After the buffers needed for the record batch, the application code should set additional registers.
+  --Coordinate these with REG_BASE in the application code.
   constant REG_NUM_VAL                       : natural := 10;
   constant REG_PAGE_ADDR0                    : natural := 11;
   constant REG_PAGE_ADDR1                    : natural := 12;
   constant REG_MAX_SIZE0                     : natural := 13;
   constant REG_MAX_SIZE1                     : natural := 14;
-
 
   ---------------------------------------
   -- Fletcher UserCoreController signals
