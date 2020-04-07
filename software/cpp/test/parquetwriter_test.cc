@@ -58,7 +58,7 @@ std::shared_ptr<arrow::Table> generate_int64_table(int num_values, bool sequenti
     PARQUET_THROW_NOT_OK(i64builder.Finish(&i64array));
 
     std::shared_ptr<arrow::Schema> schema = arrow::schema(
-            {arrow::field("int", arrow::int64(), true)});
+            {arrow::field("int", arrow::int64(), false)});
 
     return arrow::Table::Make(schema, {i64array});
 }
@@ -79,7 +79,7 @@ std::shared_ptr<arrow::Table> generate_int32_table(int num_values, bool sequenti
     PARQUET_THROW_NOT_OK(i32builder.Finish(&i32array));
 
     std::shared_ptr<arrow::Schema> schema = arrow::schema(
-            {arrow::field("int", arrow::int32(), true)});
+            {arrow::field("int", arrow::int32(), false)});
 
     return arrow::Table::Make(schema, {i32array});
 }
@@ -94,7 +94,7 @@ std::shared_ptr<arrow::Table> generate_str_table(int num_values, int min_length,
     PARQUET_THROW_NOT_OK(strbuilder.Finish(&strarray));
 
     std::shared_ptr<arrow::Schema> schema = arrow::schema(
-            {arrow::field("str", arrow::utf8(), true)});
+            {arrow::field("str", arrow::utf8(), false)});
 
     return arrow::Table::Make(schema, {strarray});
 }
