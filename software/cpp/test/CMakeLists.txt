@@ -27,4 +27,6 @@ find_library(LIB_ARROW arrow)
 find_library(LIB_PARQUET parquet)
 
 add_executable(parquetwriter_test "./parquetwriter_test.cc")
+add_executable(parquet_debugprint "./parquet_debugprint.cc")
 target_link_libraries(parquetwriter_test ${LIB_PARQUET} ${LIB_ARROW})
+target_link_libraries(parquet_debugprint ${LIB_PARQUET} ${LIB_ARROW})
