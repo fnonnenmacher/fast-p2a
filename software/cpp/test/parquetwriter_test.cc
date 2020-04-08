@@ -101,21 +101,28 @@ std::shared_ptr<arrow::Table> generate_str_table(int num_values, int min_length,
 
 void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 	for (bool dict : { false, true }) {
-		std::shared_ptr<arrow::io::FileOutputStream> outfile;
-		arrow::io::FileOutputStream::Open(name + (dict ? "_dict.prq" : ".prq"),
-				arrow::default_memory_pool(), &outfile);
-		parquet::WriterProperties::Builder propbuilder =
-				parquet::WriterProperties::Builder{};
-		propbuilder.compression(arrow::Compression::type::UNCOMPRESSED)->encoding(
-				parquet::Encoding::type::PLAIN)->disable_statistics();
-		if (!dict) {
-			propbuilder.disable_dictionary();
+		for (arrow::Compression::type comptype : {arrow::Compression::type::UNCOMPRESSED,
+				arrow::Compression::type::SNAPPY}) {
+
+			std::shared_ptr<arrow::io::FileOutputStream> outfile;
+			arrow::io::FileOutputStream::Open(name
+					+ (dict ? "_dict" : "")
+					+ (comptype == arrow::Compression::type::SNAPPY ? "_snappy" : "")
+					+ ".prq",
+					arrow::default_memory_pool(), &outfile);
+			parquet::WriterProperties::Builder propbuilder =
+					parquet::WriterProperties::Builder{};
+			propbuilder.compression(comptype)->encoding(
+					parquet::Encoding::type::PLAIN)->disable_statistics();
+			if (!dict) {
+				propbuilder.disable_dictionary();
+			}
+			std::shared_ptr<parquet::WriterProperties> writerproperties = propbuilder.build();
+			parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile,
+					10000, writerproperties);
+			outfile->Flush();
+			outfile->Close();
 		}
-		std::shared_ptr<parquet::WriterProperties> writerproperties = propbuilder.build();
-		parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile,
-				10000, writerproperties);
-		outfile->Flush();
-		outfile->Close();
 	}
 }
 
@@ -134,9 +141,6 @@ int main(int argc, char **argv) {
   write_parquet(test_int32stable, "./test_int32s");
   write_parquet(test_int32rtable, "./test_int32r");
   write_parquet(test_strtable, "./test_str");
-
-
-
 
   return 0;
 }
