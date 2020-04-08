@@ -108,12 +108,13 @@ void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 			arrow::io::FileOutputStream::Open(name
 					+ (dict ? "_dict" : "")
 					+ (comptype == arrow::Compression::type::SNAPPY ? "_snappy" : "")
-					+ ".prq",
-					arrow::default_memory_pool(), &outfile);
+					+ ".prq", false,
+					&outfile);
 			parquet::WriterProperties::Builder propbuilder =
 					parquet::WriterProperties::Builder{};
 			propbuilder.compression(comptype)->encoding(
-					parquet::Encoding::type::PLAIN)->disable_statistics();
+					parquet::Encoding::type::PLAIN)->disable_statistics()->version(
+					parquet::ParquetVersion::PARQUET_1_0);
 			if (!dict) {
 				propbuilder.disable_dictionary();
 			}
