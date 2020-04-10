@@ -27,12 +27,19 @@
 
 
 int main(int argc, char **argv) {
-	if (argc != 2) {
-		printf("usage: %s <parquet file>\n\n");
+	std::list<int> collist;
+	if (argc < 2) {
+		printf("usage: %s <parquet file> [column list] \t\t print information about parquet file and dump contents of the given columns.\n\n");
 		exit(-1);
 	}
+	if (argc > 2) {
+		for (int i = 2; i < argc; i++) {
+		collist.push_back(strtol(argv[i], 0, 10));
+		}
+	} else {
+		collist.push_back(0);
+	}
 
-	std::list<int> collist({0});
 	std::unique_ptr<parquet::ParquetFileReader> reader = parquet::ParquetFileReader::OpenFile(argv[1]);;
 	std::stringstream ss;
 	std::list<int> columns;

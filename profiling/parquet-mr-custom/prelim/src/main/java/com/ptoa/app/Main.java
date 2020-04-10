@@ -1,40 +1,29 @@
 package com.ptoa.app;
 
 
-import org.apache.avro.Schema;
+import java.io.File;
+import java.io.IOException;
+
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.column.ParquetProperties.WriterVersion;
-import org.apache.parquet.column.ParquetProperties;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.column.page.PageReadStore;
+import org.apache.parquet.column.values.factory.ValuesWriterFactory;
 import org.apache.parquet.example.data.Group;
 import org.apache.parquet.example.data.simple.convert.GroupRecordConverter;
-import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.api.WriteSupport;
+import org.apache.parquet.hadoop.example.GroupWriteSupport;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.ColumnIOFactory;
+import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.MessageColumnIO;
 import org.apache.parquet.io.RecordReader;
 import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.Type;
-import org.apache.parquet.column.page.PageReadStore;
-import org.apache.parquet.hadoop.api.WriteSupport;
-import org.apache.parquet.hadoop.example.GroupWriteSupport;
-import org.apache.parquet.hadoop.PrintFooter;
-import org.apache.parquet.column.values.factory.ValuesWriterFactory;
-import org.apache.parquet.hadoop.util.HadoopOutputFile;
-import org.apache.parquet.hadoop.ParquetFileWriter;
-
-import java.io.File;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
 
 public class Main {
   private static final Configuration conf = new Configuration();
@@ -71,14 +60,16 @@ public class Main {
   }
 
   public static void main(String[] args) throws IOException {
-    Path file = new Path("/home/lars/Documents/GitHub/fast-p2a/profiling/gen-input/ref_delta_varied_int64.parquet");
-    Path destPath = new Path("/home/lars/Documents/GitHub/fast-p2a/profiling/gen-input/hw_delta_varied_100ps_int64.parquet");
+	if (args.length != 2) {
+		System.out.printf("Arguments: <input parquet file> <output parquet file>\n\n");
+		System.exit(-1);
+	}
+    InputFile in = HadoopInputFile.fromPath(new Path(args[0]), conf);
+    Path destPath = new Path(args[1]);
 
-    ParquetFileReader reader = new ParquetFileReader(conf, file, ParquetMetadataConverter.NO_FILTER);
+    ParquetFileReader reader = new ParquetFileReader(in, new ParquetReadOptions.Builder().build());
     ParquetMetadata readFooter = reader.getFooter();
     MessageType schema = readFooter.getFileMetaData().getSchema();
-    ParquetFileReader r = new ParquetFileReader(conf, file, readFooter);
-    reader.close();
     PageReadStore pages = null;
     
     ValuesWriterFactory customV2Factory = new CustomV2ValuesWriterFactory();
@@ -114,12 +105,12 @@ public class Main {
                  .withPageRowCountLimit(100)
                  .withDictionaryEncoding(false)
                  .withValidation(false)
-                 //.withValuesWriterFactory(customV2Factory)
-                 .withWriterVersion(WriterVersion.PARQUET_2_0);
+                 .withValuesWriterFactory(customV2Factory)
+                 .withWriterVersion(WriterVersion.PARQUET_1_0);
     ParquetWriter<Group> writer = writerBuilder.build();
 
     try {
-      while (null != (pages = r.readNextRowGroup())) {
+      while (null != (pages = reader.readNextRowGroup())) {
         long rows = pages.getRowCount();
         System.out.println("Number of rows: " + pages.getRowCount());
 
@@ -133,7 +124,7 @@ public class Main {
     } finally {
       System.out.println("close the reader and writer");
 
-      r.close();
+      reader.close();
       writer.close();
     }
     /*

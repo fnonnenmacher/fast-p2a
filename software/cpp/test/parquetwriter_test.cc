@@ -26,6 +26,7 @@
 #include <memory>
 #include <string>
 
+#define NAMEBUFSIZE 64
 
 std::string gen_random_string(const int length) {
     static const char alphanum[] =
@@ -42,85 +43,116 @@ std::string gen_random_string(const int length) {
     return result;
 }
 
-std::shared_ptr<arrow::Table> generate_int64_table(int num_values, bool sequential) {
-    arrow::Int64Builder i64builder;
-    for (int i = 0; i < num_values; i++) {
-    	int number;
-        if (sequential) {
-        	number = i;
-        } else {
-        	number = rand();
-        }
-        PARQUET_THROW_NOT_OK(i64builder.Append(number));
-
+std::shared_ptr<arrow::Table> generate_int64_table(int num_values, int nCols, bool sequential) {
+    //Create the schema
+	std::vector<std::shared_ptr<arrow::Field>> fields;
+    for (int c = 0; c < nCols; c++) {
+    	char name[NAMEBUFSIZE];
+    	snprintf(name, NAMEBUFSIZE, "int%d", c);
+    	fields.push_back(arrow::field(name, arrow::int64(), false));
     }
-    std::shared_ptr<arrow::Array> i64array;
-    PARQUET_THROW_NOT_OK(i64builder.Finish(&i64array));
+    std::shared_ptr<arrow::Schema> schema = arrow::schema(fields);
 
-    std::shared_ptr<arrow::Schema> schema = arrow::schema(
-            {arrow::field("int", arrow::int64(), false)});
+    //Generate the values
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    for (int c = 0; c < nCols; c++) {
+		arrow::Int64Builder i64builder;
+		for (int i = 0; i < num_values; i++) {
+			int number;
+			if (sequential) {
+				number = i;
+			} else {
+				number = rand();
+			}
+			PARQUET_THROW_NOT_OK(i64builder.Append(number));
 
-    return arrow::Table::Make(schema, {i64array});
+		}
+		std::shared_ptr<arrow::Array> i64array;
+		PARQUET_THROW_NOT_OK(i64builder.Finish(&i64array));
+		arrays.push_back(i64array);
+    }
+
+    return arrow::Table::Make(schema, arrays);
 }
 
-std::shared_ptr<arrow::Table> generate_int32_table(int num_values, bool sequential) {
-    arrow::Int32Builder i32builder;
-    for (int i = 0; i < num_values; i++) {
-    	int number;
-    	if (sequential) {
-    		number = i;
-    	} else {
-    		number = rand();
-    	}
-        PARQUET_THROW_NOT_OK(i32builder.Append(number));
-
+std::shared_ptr<arrow::Table> generate_int32_table(int num_values, int nCols, bool sequential) {
+	//Create the schema
+	std::vector<std::shared_ptr<arrow::Field>> fields;
+    for (int c = 0; c < nCols; c++) {
+    	char name[NAMEBUFSIZE];
+    	snprintf(name, NAMEBUFSIZE, "int%d", c);
+    	fields.push_back(arrow::field(name, arrow::int32(), false));
     }
-    std::shared_ptr<arrow::Array> i32array;
-    PARQUET_THROW_NOT_OK(i32builder.Finish(&i32array));
+    std::shared_ptr<arrow::Schema> schema = arrow::schema(fields);
 
-    std::shared_ptr<arrow::Schema> schema = arrow::schema(
-            {arrow::field("int", arrow::int32(), false)});
+    //Generate the values
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    for (int c = 0; c < nCols; c++) {
+		arrow::Int32Builder i32builder;
+		for (int i = 0; i < num_values; i++) {
+			int number;
+			if (sequential) {
+				number = i;
+			} else {
+				number = rand();
+			}
+			PARQUET_THROW_NOT_OK(i32builder.Append(number));
 
-    return arrow::Table::Make(schema, {i32array});
+		}
+		std::shared_ptr<arrow::Array> i32array;
+		PARQUET_THROW_NOT_OK(i32builder.Finish(&i32array));
+		arrays.push_back(i32array);
+    }
+
+    return arrow::Table::Make(schema, arrays);
 }
 
-std::shared_ptr<arrow::Table> generate_str_table(int num_values, int min_length, int max_length) {
-    arrow::StringBuilder strbuilder;
-    for (int i = 0; i < num_values; i++) {
-        int length = rand() % (max_length - min_length + 1) + min_length;
-        PARQUET_THROW_NOT_OK(strbuilder.Append(gen_random_string(length)));
+std::shared_ptr<arrow::Table> generate_str_table(int num_values, int nCols, int min_length, int max_length) {
+	//Create the schema
+	std::vector<std::shared_ptr<arrow::Field>> fields;
+    for (int c = 0; c < nCols; c++) {
+    	char name[NAMEBUFSIZE];
+    	snprintf(name, NAMEBUFSIZE, "str%d", c);
+    	fields.push_back(arrow::field(name, arrow::utf8(), false));
     }
-    std::shared_ptr<arrow::Array> strarray;
-    PARQUET_THROW_NOT_OK(strbuilder.Finish(&strarray));
+    std::shared_ptr<arrow::Schema> schema = arrow::schema(fields);
 
-    std::shared_ptr<arrow::Schema> schema = arrow::schema(
-            {arrow::field("str", arrow::utf8(), false)});
+    //Generate the values
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    for (int c = 0; c < nCols; c++) {
+		arrow::StringBuilder strbuilder;
+		for (int i = 0; i < num_values; i++) {
+			int length = rand() % (max_length - min_length + 1) + min_length;
+			PARQUET_THROW_NOT_OK(strbuilder.Append(gen_random_string(length)));
+		}
+		std::shared_ptr<arrow::Array> strarray;
+		PARQUET_THROW_NOT_OK(strbuilder.Finish(&strarray));
+		arrays.push_back(strarray);
+    }
 
-    return arrow::Table::Make(schema, {strarray});
+
+    return arrow::Table::Make(schema, arrays);
 }
 
 void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 	for (bool dict : { false, true }) {
 		for (arrow::Compression::type comptype : {arrow::Compression::type::UNCOMPRESSED,
-				arrow::Compression::type::SNAPPY}) {
-
+												  arrow::Compression::type::SNAPPY}) {
 			std::shared_ptr<arrow::io::FileOutputStream> outfile;
-			arrow::io::FileOutputStream::Open(name
+			std::string filename = name
 					+ (dict ? "_dict" : "")
 					+ (comptype == arrow::Compression::type::SNAPPY ? "_snappy" : "")
-					+ ".prq", false,
-					&outfile);
-			parquet::WriterProperties::Builder propbuilder =
-					parquet::WriterProperties::Builder{};
+					+ ".prq";
+			arrow::io::FileOutputStream::Open(filename, false, &outfile);
+			parquet::WriterProperties::Builder propbuilder = parquet::WriterProperties::Builder{};
 			propbuilder.compression(comptype)->encoding(
 					parquet::Encoding::type::PLAIN)->disable_statistics()->version(
 					parquet::ParquetVersion::PARQUET_1_0);
 			if (!dict) {
 				propbuilder.disable_dictionary();
 			}
-			std::shared_ptr<parquet::WriterProperties> writerproperties = propbuilder.build();
 			parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile,
-					10000, writerproperties);
+					INT_MAX, propbuilder.build());
 			outfile->Flush();
 			outfile->Close();
 		}
@@ -128,14 +160,22 @@ void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 }
 
 int main(int argc, char **argv) {
-	std::shared_ptr<arrow::io::FileOutputStream> outfile;
-	  arrow::io::FileOutputStream::Open("test_int64_nodict.prq", arrow::default_memory_pool(), &outfile);
+	int nRows = 100;
+	int nCols = 1;
+	if (argc >= 2) {
+		nRows = strtol(argv[1], 0, 10);
+	}
+	if (argc >= 3) {
+		nCols = strtol(argv[2], 0, 10);
+	}
 
-  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(100, false);
-  std::shared_ptr<arrow::Table> test_int64stable = generate_int64_table(100, true);
-  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(100, false);
-  std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(100, true);
-  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(100, 2, 128);
+	printf("Generating parquet files with %d rows, %d columns\n", nRows, nCols);
+
+  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(nRows, nCols, false);
+  std::shared_ptr<arrow::Table> test_int64stable = generate_int64_table(nRows, nCols, true);
+  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(nRows, nCols, false);
+  std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(nRows, nCols, true);
+  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(nRows, nCols, 2, 128);
 
   write_parquet(test_int64stable, "./test_int64s");
   write_parquet(test_int64rtable, "./test_int64r");
