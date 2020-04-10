@@ -282,7 +282,7 @@ begin
                 when HEADER =>
                   field_state_next <= HEADER;
 
-                  if current_byte = x"4c" then
+                  if current_byte = x"1c" then
                     page_header_state_next <= DATA_PAGE_HEADER;
                   elsif current_byte = x"3c" then
                     page_header_state_next <= DICT_PAGE_HEADER;

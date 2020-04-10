@@ -89,10 +89,10 @@ architecture behv of ptoa_wrapper is
   -- See FLETCHER_REG_SCHEMA 
   constant REG_START_INDEX                   : natural := 4;
   constant REG_END_INDEX                     : natural := 5;
-  constant REG_VAL_ADDR0                     : natural := 6;
-  constant REG_VAL_ADDR1                     : natural := 7;
-  constant REG_OFF_ADDR0                     : natural := 8;
-  constant REG_OFF_ADDR1                     : natural := 9;
+  constant REG_OFF_ADDR0                     : natural := 6;
+  constant REG_OFF_ADDR1                     : natural := 7;
+  constant REG_VAL_ADDR0                     : natural := 8;
+  constant REG_VAL_ADDR1                     : natural := 9;
 
   --After the buffers needed for the record batch, the application code should set additional registers.
   --Coordinate these with REG_BASE in the application code.
@@ -175,7 +175,7 @@ begin
       done                                     => uctrl_done
     );
 
-  prim32_reader_inst: ParquetReader
+  str_reader_inst: ParquetReader
     generic map(
       BUS_ADDR_WIDTH                           => BUS_ADDR_WIDTH,
       BUS_DATA_WIDTH                           => BUS_DATA_WIDTH,
@@ -186,10 +186,10 @@ begin
       INDEX_WIDTH                              => INDEX_WIDTH,
       ---------------------------------------------------------------------------------
       TAG_WIDTH                                => TAG_WIDTH,
+--      CFG                                      => "listprim(8;epc=64,last_from_length=0)",
+--      ENCODING                                 => "PLAIN",
       CFG                                      => "listprim(8;lepc=4,epc=64,last_from_length=0)",
       ENCODING                                 => "DELTA_LENGTH",
-      --CFG                                      => "prim(32;epc=4)",
-      --ENCODING                                 => "DELTA",
       COMPRESSION_CODEC                        => "UNCOMPRESSED"
     )
     port map(

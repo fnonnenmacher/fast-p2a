@@ -175,7 +175,7 @@ begin
       done                                     => uctrl_done
     );
 
-  prim32_reader_inst: ParquetReader
+  prim64_reader_inst: ParquetReader
     generic map(
       BUS_ADDR_WIDTH                           => BUS_ADDR_WIDTH,
       BUS_DATA_WIDTH                           => BUS_DATA_WIDTH,
@@ -186,10 +186,8 @@ begin
       INDEX_WIDTH                              => INDEX_WIDTH,
       ---------------------------------------------------------------------------------
       TAG_WIDTH                                => TAG_WIDTH,
-      --CFG                                      => "listprim(8;lepc=4,epc=64)",
-      --ENCODING                                 => "DELTA_LENGTH",
       CFG                                      => "prim(64;epc=8)",
-      ENCODING                                 => "PLAIN",
+      ENCODING                                 => "DELTA",
       COMPRESSION_CODEC                        => "UNCOMPRESSED"
     )
     port map(
