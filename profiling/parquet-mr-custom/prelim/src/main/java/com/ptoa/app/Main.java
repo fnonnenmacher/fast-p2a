@@ -60,8 +60,8 @@ public class Main {
   }
 
   public static void main(String[] args) throws IOException {
-	if (args.length != 2) {
-		System.out.printf("Arguments: <input parquet file> <output parquet file>\n\n");
+	if (args.length != 3) {
+		System.out.printf("Arguments: <input parquet file> <output parquet file> <Page size>\n\n");
 		System.exit(-1);
 	}
     InputFile in = HadoopInputFile.fromPath(new Path(args[0]), conf);
@@ -71,6 +71,8 @@ public class Main {
     ParquetMetadata readFooter = reader.getFooter();
     MessageType schema = readFooter.getFileMetaData().getSchema();
     PageReadStore pages = null;
+    
+    int pageSize = Integer.valueOf(args[2]);
     
     ValuesWriterFactory customV2Factory = new CustomV2ValuesWriterFactory();
 
@@ -100,9 +102,9 @@ public class Main {
     CustomBuilder writerBuilder = new CustomBuilder(destPath);
     writerBuilder.withSchema(schema, conf)
                  .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
-                 .withRowGroupSize(Integer.MAX_VALUE)//
-                 .withPageSize(100)
-                 .withPageRowCountLimit(100)
+                 .withRowGroupSize(Integer.MAX_VALUE)
+                 .withPageSize(pageSize)
+//                 .withPageRowCountLimit(100)
                  .withDictionaryEncoding(false)
                  .withValidation(false)
                  .withValuesWriterFactory(customV2Factory)
