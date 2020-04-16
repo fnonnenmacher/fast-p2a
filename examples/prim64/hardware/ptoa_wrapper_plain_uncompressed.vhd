@@ -140,15 +140,17 @@ architecture behv of ptoa_wrapper is
 begin
   
   -- Only the status register needs to be written to
-  regs_out_en(REG_CONTROL)     <= '0';
-  regs_out_en(REG_STATUS)      <= '1';
-  regs_out_en(REG_NUM_VAL)     <= '0';
-  regs_out_en(REG_PAGE_ADDR0)  <= '0';
-  regs_out_en(REG_PAGE_ADDR1)  <= '0';
-  regs_out_en(REG_MAX_SIZE0)   <= '0';
-  regs_out_en(REG_MAX_SIZE1)   <= '0';
-  regs_out_en(REG_VAL_ADDR0)   <= '0';
-  regs_out_en(REG_VAL_ADDR1)   <= '0';
+  regs_out_en <= (
+  REG_CONTROL     => '0',
+  REG_STATUS      => '1',
+  REG_NUM_VAL     => '0',
+  REG_PAGE_ADDR0  => '0',
+  REG_PAGE_ADDR1  => '0',
+  REG_MAX_SIZE0   => '0',
+  REG_MAX_SIZE1   => '0',
+  REG_VAL_ADDR0   => '0',
+  REG_VAL_ADDR1   => '0',
+  others          => '0');
 --  regs_out_en(REG_OFF_ADDR0)   <= '0';
 --  regs_out_en(REG_OFF_ADDR1)   <= '0';
 
