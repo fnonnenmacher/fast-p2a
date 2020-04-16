@@ -60,10 +60,11 @@ public class Main {
   }
 
   public static void main(String[] args) throws IOException {
-	if (args.length != 3) {
-		System.out.printf("Arguments: <input parquet file> <output parquet file> <Page size>\n\n");
+	if (args.length != 3 && args.length != 4) {
+		System.out.printf("Arguments: <input parquet file> <output parquet file> <Page size> [delta]\n\n");
 		System.exit(-1);
 	}
+	boolean deltaEncoding = false;
     InputFile in = HadoopInputFile.fromPath(new Path(args[0]), conf);
     Path destPath = new Path(args[1]);
 
@@ -73,8 +74,17 @@ public class Main {
     PageReadStore pages = null;
     
     int pageSize = Integer.valueOf(args[2]);
+    if (args.length >= 4 && args[3].contentEquals("delta")) {
+    	deltaEncoding = true;
+    }
     
-    ValuesWriterFactory customV2Factory = new CustomV2ValuesWriterFactory();
+    
+    ValuesWriterFactory customV2Factory;
+    if (deltaEncoding) {
+    	customV2Factory = new CustomDeltaValuesWriterFactory();
+    } else {
+    	customV2Factory = new CustomPlainValuesWriterFactory();
+    }
 
     File t = new File(destPath.toString());
     t.delete();
