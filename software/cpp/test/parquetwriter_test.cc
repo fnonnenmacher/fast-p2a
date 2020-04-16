@@ -15,16 +15,22 @@
 #include <arrow/array/builder_primitive.h>
 #include <arrow/io/file.h>
 #include <arrow/memory_pool.h>
+#include <arrow/result.h>
 #include <arrow/status.h>
 #include <arrow/table.h>
 #include <arrow/type.h>
 #include <arrow/util/compression.h>
 #include <parquet/arrow/writer.h>
+#include <parquet/exception.h>
 #include <parquet/properties.h>
 #include <parquet/types.h>
+#include <climits>
+#include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #define NAMEBUFSIZE 64
 
@@ -143,7 +149,12 @@ void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 					+ (dict ? "_dict" : "")
 					+ (comptype == arrow::Compression::type::SNAPPY ? "_snappy" : "")
 					+ ".prq";
-			arrow::io::FileOutputStream::Open(filename, false, &outfile);
+			arrow::Result<std::shared_ptr<arrow::io::FileOutputStream>> result = arrow::io::FileOutputStream::Open(filename, false);
+			if (result.ok()) {
+				outfile = result.ValueOrDie();
+			} else {
+				std::cout << "Error occurred opening file " << name;
+			}
 			parquet::WriterProperties::Builder propbuilder = parquet::WriterProperties::Builder{};
 			propbuilder.compression(comptype)->encoding(
 					parquet::Encoding::type::PLAIN)->disable_statistics()->version(
@@ -177,10 +188,10 @@ int main(int argc, char **argv) {
   std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(nRows, nCols, true);
   std::shared_ptr<arrow::Table> test_strtable = generate_str_table(nRows, nCols, 2, 128);
 
-  write_parquet(test_int64stable, "./test_int64s");
-  write_parquet(test_int64rtable, "./test_int64r");
-  write_parquet(test_int32stable, "./test_int32s");
-  write_parquet(test_int32rtable, "./test_int32r");
+//  write_parquet(test_int64stable, "./test_int64s");
+  write_parquet(test_int64rtable, "./test_int64");
+//  write_parquet(test_int32stable, "./test_int32s");
+  write_parquet(test_int32rtable, "./test_int32");
   write_parquet(test_strtable, "./test_str");
 
   return 0;
