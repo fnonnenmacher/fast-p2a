@@ -64,11 +64,11 @@ std::shared_ptr<arrow::Table> generate_int64_table(int num_values, int nCols, bo
     for (int c = 0; c < nCols; c++) {
 		arrow::Int64Builder i64builder;
 		for (int i = 0; i < num_values; i++) {
-			int number;
+			long number;
 			if (sequential) {
 				number = i;
 			} else {
-				number = rand();
+				number = ((long)rand() << 32) | rand();
 			}
 			PARQUET_THROW_NOT_OK(i64builder.Append(number));
 
