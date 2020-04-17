@@ -34,6 +34,7 @@ for datatype in int32 int64 str; do
 		mv test_${datatype}_ps${size_bytes}_delta.prq $outdir
 	done
 done
+mv test_str.prq $outdir #needed for str, because the cpp lib only supports plain encoding
 
 
 
