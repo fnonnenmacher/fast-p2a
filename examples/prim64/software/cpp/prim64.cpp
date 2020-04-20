@@ -164,6 +164,11 @@ int main(int argc, char **argv) {
   //file_data = (uint8_t*)std::malloc(file_size);
   posix_memalign((void**)&file_data, 4096, file_size);
   parquet_file.read((char *)file_data, file_size);
+  unsigned int checksum = 0;
+  for (int i = 0; i< file_size; i++) {
+	  checksum += file_data[i];
+  }
+  printf("File checksum 0x%lu", checksum);
 
   /*************************************************************
   * FPGA RecordBatch preparation
@@ -174,6 +179,9 @@ int main(int argc, char **argv) {
   t.stop();
   std::cout << "Prepare FPGA RecordBatch         : "
             << t.seconds() << std::endl;
+  auto result_array = std::dynamic_pointer_cast<arrow::Int64Array>(arrow_rb_fpga->column(0));
+  auto result_buffer_raw_data = result_array->values()->mutable_data();
+  int outbuf_size = result_array->values()->size();
 
   /*************************************************************
   * FPGA Initilialization
@@ -201,6 +209,7 @@ int main(int argc, char **argv) {
        // Set all the MMIO registers to their correct value
        // Add 4 to device_parquet_address to skip magic number
        setPtoaArguments(platform, num_val, file_size, (da_t)(file_data+4));
+       memset(file_data, 0, outbuf_size); //to prevent FPGA card from experiencing TLB misses
        t.stop();
      } else {
        da_t device_parquet_address;
@@ -244,8 +253,6 @@ int main(int argc, char **argv) {
   *************************************************************/
 
   t.start();
-  auto result_array = std::dynamic_pointer_cast<arrow::Int64Array>(arrow_rb_fpga->column(0));
-  auto result_buffer_raw_data = result_array->values()->mutable_data();
   platform->CopyDeviceToHost(context->device_buffer(0).device_address,
                              result_buffer_raw_data,
                              sizeof(int64_t) * (num_val));
