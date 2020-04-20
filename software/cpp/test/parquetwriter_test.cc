@@ -27,6 +27,7 @@
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -173,26 +174,46 @@ void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 int main(int argc, char **argv) {
 	int nRows = 100;
 	int nCols = 1;
+	enum Datatype {int32, int64, str};
+	std::string typenames[] = {"int32", "int64", "str"};
+	Datatype datatype = int64;
 	if (argc >= 2) {
-		nRows = strtol(argv[1], 0, 10);
+		if (!strncmp(argv[1], "int32", 5)) {
+			datatype = int32;
+		}
+		if (!strncmp(argv[1], "int64", 5)) {
+			datatype = int64;
+		}
+		if (!strncmp(argv[1], "str", 3)) {
+			datatype = str;
+		}
 	}
 	if (argc >= 3) {
-		nCols = strtol(argv[2], 0, 10);
+		nRows = strtol(argv[2], 0, 10);
+	}
+	if (argc >= 4) {
+		nCols = strtol(argv[3], 0, 10);
 	}
 
-	printf("Generating parquet files with %d rows, %d columns\n", nRows, nCols);
+  printf("Generating parquet files with %s datatype, %d rows, %d columns\n", typenames[datatype].c_str(), nRows, nCols);
 
-  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(nRows, nCols, false);
-  std::shared_ptr<arrow::Table> test_int64stable = generate_int64_table(nRows, nCols, true);
-  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(nRows, nCols, false);
-  std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(nRows, nCols, true);
-  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(nRows, nCols, 2, 128);
+  if (datatype == int32) {
+	//  std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(nRows, nCols, true);
+	//  write_parquet(test_int32stable, "./test_int32s");
+	  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(nRows, nCols, false);
+	  write_parquet(test_int32rtable, "./test_int32");
+  }
+  if (datatype == int64) {
+	//  std::shared_ptr<arrow::Table> test_int64stable = generate_int64_table(nRows, nCols, true);
+	//  write_parquet(test_int64stable, "./test_int64s");
+	  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(nRows, nCols, false);
+	  write_parquet(test_int64rtable, "./test_int64");
+  }
+  if (datatype == str) {
+	  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(nRows, nCols, 2, 128);
+	  write_parquet(test_strtable, "./test_str");
+  }
 
-//  write_parquet(test_int64stable, "./test_int64s");
-  write_parquet(test_int64rtable, "./test_int64");
-//  write_parquet(test_int32stable, "./test_int32s");
-  write_parquet(test_int32rtable, "./test_int32");
-  write_parquet(test_strtable, "./test_str");
 
   return 0;
 }
