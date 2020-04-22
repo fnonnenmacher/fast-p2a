@@ -205,6 +205,9 @@ status SWParquetReader::count_pages(int32_t file_offset) {
         if(read_metadata(page_ptr, &uncompressed_size, &compressed_size, &page_num_values, &def_level_length, &rep_level_length, &metadata_size) != status::OK) {
             break;
         }
+//		printf("Found page at offset 0x%x (file size 0x%x)\n", page_ptr-parquet_data, file_size);
+//		printf("uncompressed_size %d, compressed_size %d, page_num_values %d, def_level_length 0x%x, rep_level_length 0x%x, metadata_size %d\n",
+//				uncompressed_size,    compressed_size,    page_num_values,    def_level_length,      rep_level_length,      metadata_size);
 
         page_ptr += metadata_size;    
         page_ptr += compressed_size;
@@ -324,7 +327,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     // PageType
     if(*current_byte != 0x15){
-        //std::cerr<<"PageType error"<<std::endl;
+        std::cerr<<"PageType error"<<std::endl;
         return status::FAIL;
     }
 
@@ -338,7 +341,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Uncompressed page size
     if(*current_byte != 0x15){
-        //std::cerr<<"uncompressed_size error"<<std::endl;
+        std::cerr<<"uncompressed_size error"<<std::endl;
         return status::FAIL;
     }
 
@@ -348,7 +351,131 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Compressed page size
     if(*current_byte != 0x15){
-        //std::cerr<<"compressed_size error"<<std::endl;
+        std::cerr<<"compressed_size error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    current_byte += decode_varint32(current_byte, compressed_size, true);
+
+    //CRC
+    int data_page_field_header = 0x2c;
+
+    if(*current_byte == 0x15){
+        current_byte++;
+
+        while((*current_byte & 0x80) != 0 ){
+           current_byte++;
+        };
+
+        current_byte++;
+        data_page_field_header = 0x1c;
+    }
+
+    //DataPageHeader
+    if(*current_byte != data_page_field_header){
+        fprintf(stderr, "datapagev2 error: found 0x%x instead of 0x%x\n", *current_byte, data_page_field_header);
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    //Num values
+    if(*current_byte != 0x15){
+        std::cerr<<"numval error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    current_byte += decode_varint32(current_byte, num_values, true);
+
+    //Encoding
+    if(*current_byte != 0x15){
+        std::cerr<<"encoding error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    while((*current_byte & 0x80) != 0 ){
+        current_byte++;
+    }
+
+    current_byte++;
+
+    //Definition level encoding
+    if(*current_byte != 0x15){
+        std::cerr<<"def_level encoding error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    while((*current_byte & 0x80) != 0 ){
+        current_byte++;
+    }
+
+    current_byte++;
+
+    //Repetition level encoding
+    if(*current_byte != 0x15){
+        std::cerr<<"enc_level encoding error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    while((*current_byte & 0x80) != 0 ){
+        current_byte++;
+    }
+
+    current_byte++;
+
+    //Skip stop bytes
+    current_byte += 2;
+
+    *metadata_size = current_byte - metadata;
+
+
+    return status::OK;
+
+}
+
+// Read all relevant fields from the Parquet page header pointed to by uint8_t* metadata.
+status SWParquetReader::read_metadata_v2(const uint8_t* metadata, int32_t* uncompressed_size, int32_t* compressed_size, int32_t* num_values,
+                                      int32_t* def_level_length, int32_t* rep_level_length, int32_t* metadata_size) {
+
+    const uint8_t* current_byte = metadata;
+
+    // PageType
+    if(*current_byte != 0x15){
+        std::cerr<<"PageType error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    while((*current_byte & 0x80) != 0 ){
+        current_byte++;
+    }
+
+    current_byte++;
+
+    //Uncompressed page size
+    if(*current_byte != 0x15){
+        std::cerr<<"uncompressed_size error"<<std::endl;
+        return status::FAIL;
+    }
+
+    current_byte++;
+
+    current_byte += decode_varint32(current_byte, uncompressed_size, true);
+
+    //Compressed page size
+    if(*current_byte != 0x15){
+        std::cerr<<"compressed_size error"<<std::endl;
         return status::FAIL;
     }
 
@@ -372,7 +499,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //DataPageHeaderV2
     if(*current_byte != data_page_v2_field_header){
-        //std::cerr<<"datapagev2 error"<<std::endl;
+        std::cerr<<"datapagev2 error"<<std::endl;
         return status::FAIL;
     }
 
@@ -380,7 +507,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Num values
     if(*current_byte != 0x15){
-        //std::cerr<<"numval error"<<std::endl;
+        std::cerr<<"numval error"<<std::endl;
         return status::FAIL;
     }
 
@@ -390,7 +517,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Num nulls
     if(*current_byte != 0x15){
-        //std::cerr<<"num_null error"<<std::endl;
+        std::cerr<<"num_null error"<<std::endl;
         return status::FAIL;
     }
 
@@ -404,7 +531,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Num rows
     if(*current_byte != 0x15){
-        //std::cerr<<"numrow error"<<std::endl;
+        std::cerr<<"numrow error"<<std::endl;
         return status::FAIL;
     }
 
@@ -418,7 +545,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Encoding
     if(*current_byte != 0x15){
-        //std::cerr<<"enc error"<<std::endl;
+        std::cerr<<"enc error"<<std::endl;
         return status::FAIL;
     }
 
@@ -432,7 +559,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //Def level byte length
     if(*current_byte != 0x15){
-        //std::cerr<<"def_level_length error"<<std::endl;
+        std::cerr<<"def_level_length error"<<std::endl;
         return status::FAIL;
     }
 
@@ -442,7 +569,7 @@ status SWParquetReader::read_metadata(const uint8_t* metadata, int32_t* uncompre
 
     //rep level byte length
     if(*current_byte != 0x15){
-        //std::cerr<<"rep_level_length error"<<std::endl;
+        std::cerr<<"rep_level_length error"<<std::endl;
         return status::FAIL;
     }
 

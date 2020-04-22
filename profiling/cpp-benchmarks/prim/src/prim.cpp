@@ -29,11 +29,12 @@ std::shared_ptr<arrow::Array> readArray(std::string hw_input_file_path) {
   std::unique_ptr<parquet::arrow::FileReader> reader;
   PARQUET_THROW_NOT_OK(parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
 
-  std::shared_ptr<arrow::Array> array;
-  PARQUET_THROW_NOT_OK(reader->ReadColumn(0, &array));
-
+  std::shared_ptr<arrow::ChunkedArray> carray;
+  PARQUET_THROW_NOT_OK(reader->ReadColumn(0, &carray));
+  std::shared_ptr<arrow::Array> array = carray->chunk(0);
   return array;
 }
+
 
 int main(int argc, char **argv) {
     int num_values;
@@ -58,16 +59,16 @@ int main(int argc, char **argv) {
         std::cerr << "Invalid argument. Option \"verify\" should be \"y\" or \"n\"" << std::endl;
         return 1;
       }
-      if(argv[6][0] == 'y') {
+      if(!strncmp(argv[6], "delta", 5)) {
         enc = ptoa::encoding::DELTA;
-      } else if (argv[6][0] == 'n') {
+      } else if (!strncmp(argv[6], "plain", 5)) {
         enc = ptoa::encoding::PLAIN;
       } else {
-        std::cerr << "Invalid argument. Option \"delta_encoded\" should be \"y\" or \"n\"" << std::endl;
+        std::cerr << "Invalid argument. Option \"encoding\" should be \"delta\" or \"plain\"" << std::endl;
         return 1;
       }
     } else {
-      std::cerr << "Usage: prim parquet_hw_input_file_path reference_parquet_file_path num_values iterations verify(y or n) delta_encoded(y or n)" << std::endl;
+      std::cerr << "Usage: prim parquet_hw_input_file_path reference_parquet_file_path num_values iterations verify(y or n) encoding" << std::endl;
       return 1;
     }
 
@@ -77,25 +78,6 @@ int main(int argc, char **argv) {
 
     std::shared_ptr<arrow::PrimitiveArray> array;
     std::shared_ptr<arrow::Buffer> arr_buffer;
-
-    // Only relevant for the benchmark with pre-allocated (and memset) buffer
-    arrow::AllocateBuffer(num_values*(PRIM_WIDTH/8), &arr_buffer);
-    std::memset((void*)(arr_buffer->mutable_data()), 0, num_values*(PRIM_WIDTH/8));
-    
-    for(int i=0; i<iterations; i++){
-        t.start();
-        // Reading the Parquet file. The interesting bit.
-        if(reader.read_prim(PRIM_WIDTH, num_values, 4, &array, arr_buffer, enc) != ptoa::status::OK){
-            return 1;
-        }
-        t.stop();
-        t.record();
-    }
-
-    std::cout << "Read " << num_values << " values" << std::endl;
-    std::cout << "Average time in seconds (pre-allocated): " << t.average() << std::endl;
-
-    t.clear_history();
 
     for(int i=0; i<iterations; i++){
         t.start();
@@ -109,6 +91,25 @@ int main(int argc, char **argv) {
 
     std::cout << "Read " << num_values << " values" << std::endl;
     std::cout << "Average time in seconds (not pre-allocated): " << t.average() << std::endl;
+
+    t.clear_history();
+
+    // Only relevant for the benchmark with pre-allocated (and memset) buffer
+    arrow::AllocateBuffer(num_values*(PRIM_WIDTH/8), &arr_buffer);
+    std::memset((void*)(arr_buffer->mutable_data()), 0, num_values*(PRIM_WIDTH/8));
+
+    for(int i=0; i<iterations; i++){
+        t.start();
+        // Reading the Parquet file. The interesting bit.
+        if(reader.read_prim(PRIM_WIDTH, num_values, 4, &array, arr_buffer, enc) != ptoa::status::OK){
+            return 1;
+        }
+        t.stop();
+        t.record();
+    }
+
+    std::cout << "Read " << num_values << " values" << std::endl;
+    std::cout << "Average time in seconds (pre-allocated): " << t.average() << std::endl;
 
     if(verify_output) {
         #if PRIM_WIDTH == 64

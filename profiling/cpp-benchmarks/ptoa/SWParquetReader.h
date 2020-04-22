@@ -43,6 +43,7 @@ class SWParquetReader {
 
   private:
   	status read_metadata(const uint8_t* metadata, int32_t* uncompressed_size, int32_t* compressed_size, int32_t* num_values, int32_t* def_level_length, int32_t* rep_level_length, int32_t* metadata_size);
+  	status read_metadata_v2(const uint8_t* metadata, int32_t* uncompressed_size, int32_t* compressed_size, int32_t* num_values, int32_t* def_level_length, int32_t* rep_level_length, int32_t* metadata_size);
     status read_delta_header32(const uint8_t* header, int32_t* first_value, int32_t* header_size);
     status read_block_header32(const uint8_t* header, int32_t* min_delta, uint8_t* bitwidths, int32_t* header_size);
     status read_delta_header64(const uint8_t* header, int64_t* first_value, int32_t* header_size);

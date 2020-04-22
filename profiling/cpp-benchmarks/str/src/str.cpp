@@ -27,9 +27,9 @@ std::shared_ptr<arrow::Array> readArray(std::string hw_input_file_path) {
   std::unique_ptr<parquet::arrow::FileReader> reader;
   PARQUET_THROW_NOT_OK(parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
 
-  std::shared_ptr<arrow::Array> array;
-  PARQUET_THROW_NOT_OK(reader->ReadColumn(0, &array));
-
+  std::shared_ptr<arrow::ChunkedArray> carray;
+  PARQUET_THROW_NOT_OK(reader->ReadColumn(0, &carray));
+  std::shared_ptr<arrow::Array> array = carray->chunk(0);
   return array;
 }
 
@@ -74,27 +74,6 @@ int main(int argc, char **argv) {
     std::shared_ptr<arrow::Buffer> off_buffer;
     std::shared_ptr<arrow::Buffer> val_buffer;
 
-    // Only relevant for the benchmark with pre-allocated (and memset) buffer
-    arrow::AllocateBuffer((num_strings+1)*sizeof(int32_t), &off_buffer);
-    std::memset((void*)(off_buffer->mutable_data()), 0, (num_strings+1)*sizeof(int32_t));
-    arrow::AllocateBuffer(num_chars, &val_buffer);
-    std::memset((void*)(val_buffer->mutable_data()), 0, num_chars);
-    
-    for(int i=0; i<iterations; i++){
-        t.start();
-        // Reading the Parquet file. The interesting bit.
-        if(reader.read_string(num_strings, 4, &result_array, off_buffer, val_buffer, ptoa::encoding::DELTA_LENGTH) != ptoa::status::OK){
-            return 1;
-        }
-        t.stop();
-        t.record();
-    }
-
-    std::cout << "Read " << num_strings << " strings" << std::endl;
-    std::cout << "Average time in seconds (pre-allocated): " << t.average() << std::endl;
-
-    t.clear_history();
-
     for(int i=0; i<iterations; i++){
         t.start();
         // Reading the Parquet file. The interesting bit.
@@ -107,6 +86,27 @@ int main(int argc, char **argv) {
 
     std::cout << "Read " << num_strings << " strings" << std::endl;
     std::cout << "Average time in seconds (not pre-allocated): " << t.average() << std::endl;
+
+    t.clear_history();
+
+    // Only relevant for the benchmark with pre-allocated (and memset) buffer
+    arrow::AllocateBuffer((num_strings+1)*sizeof(int32_t), &off_buffer);
+    std::memset((void*)(off_buffer->mutable_data()), 0, (num_strings+1)*sizeof(int32_t));
+    arrow::AllocateBuffer(num_chars, &val_buffer);
+    std::memset((void*)(val_buffer->mutable_data()), 0, num_chars);
+
+    for(int i=0; i<iterations; i++){
+        t.start();
+        // Reading the Parquet file. The interesting bit.
+        if(reader.read_string(num_strings, 4, &result_array, off_buffer, val_buffer, ptoa::encoding::DELTA_LENGTH) != ptoa::status::OK){
+            return 1;
+        }
+        t.stop();
+        t.record();
+    }
+
+    std::cout << "Read " << num_strings << " strings" << std::endl;
+    std::cout << "Average time in seconds (pre-allocated): " << t.average() << std::endl;
 
     if(verify_output) {
         //std::cout<<"Num chars: "<<num_chars<<std::endl;
