@@ -121,11 +121,11 @@ std::shared_ptr<arrow::ChunkedArray> readArray(std::string file_path) {
 			  status.code(), status.message().c_str());
 	  exit(-1);
   }
-  printf("array->num_chunks() %d\n", array->num_chunks());
-  printf("array->length() %d\n", array->length());
-  for (int i = 0; i < array->length(); i++) {
-	  printf("array[%02d]: [%s]\n", i, std::dynamic_pointer_cast<arrow::StringArray>(array->chunk(0))->GetString(i).c_str());
-  }
+//  printf("array->num_chunks() %d\n", array->num_chunks());
+//  printf("array->length() %d\n", array->length());
+//  for (int i = 0; i < array->length(); i++) {
+//	  printf("array[%02d]: [%s]\n", i, std::dynamic_pointer_cast<arrow::StringArray>(array->chunk(0))->GetString(i).c_str());
+//  }
 
   return array;
 }
