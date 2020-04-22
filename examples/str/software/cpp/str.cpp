@@ -152,7 +152,7 @@ int main(int argc, char **argv) {
     num_strings = (uint32_t) std::strtoul(argv[3], nullptr, 10);
 
   } else {
-    std::cerr << "Usage: prim32 <parquet_hw_input_file_path> <reference_parquet_file_path> <num_strings>" << std::endl;
+    std::cerr << "Usage: str <parquet_hw_input_file_path> <reference_parquet_file_path> <num_strings>" << std::endl;
     return 1;
   }
 
@@ -183,12 +183,17 @@ int main(int argc, char **argv) {
   //Get filesize
   parquet_file.seekg (0, parquet_file.end);
   file_size = parquet_file.tellg();
-  parquet_file.seekg (0, parquet_file.beg);
+  parquet_file.seekg (4, parquet_file.beg);
 
   //Read file data
   //file_data = (uint8_t*)std::malloc(file_size);
-  posix_memalign((void**)&file_data, 4096, file_size);
-  parquet_file.read((char *)file_data, file_size);
+  posix_memalign((void**)&file_data, 4096, file_size - 4);
+  parquet_file.read((char *)file_data, file_size - 4);
+  unsigned int checksum = 0;
+  for (int i = 0; i < file_size - 4; i++) {
+    checksum += file_data[i];
+  }
+  printf("Parquet file checksum 0x%lu\n", checksum);
 
 
   /*************************************************************
@@ -200,6 +205,11 @@ int main(int argc, char **argv) {
   t.stop();
   std::cout << "Prepare FPGA RecordBatch         : "
             << t.seconds() << std::endl;
+  auto result_array = std::dynamic_pointer_cast<arrow::StringArray>(arrow_rb_fpga->column(0));
+  auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
+  auto result_buffer_raw_values = result_array->value_data()->mutable_data();
+  auto result_buffer_offsets_size = result_array->value_offsets()->size();
+  auto result_buffer_values_size = result_array->value_data()->size();
 
   /*************************************************************
   * FPGA Initialization
@@ -214,27 +224,28 @@ int main(int argc, char **argv) {
   fletcher::Context::Make(&context, platform);
 
   fletcher::Kernel kernel(context);
+  kernel.Reset();
 
   //Setup destination recordbatch on device
   context->QueueRecordBatch(arrow_rb_fpga);
   context->Enable();
 
   //Malloc parquet file on device
+  da_t device_parquet_address;
   if (strcmp("oc-accel", platform->name().c_str()) == 0
 		  || strcmp("snap", platform->name().c_str()) == 0) {
     printf("Platform [%s]: Skipping device buffer allocation and host to device copy.\n",
     		platform->name().c_str());
     // Set all the MMIO registers to their correct value
-    // Add 4 to device_parquet_address to skip magic number
-    setPtoaArguments(platform, num_strings, file_size, (da_t)(file_data+4));
-    t.stop();
+    setPtoaArguments(platform, num_strings, file_size, (da_t)(file_data));
+    memset(result_buffer_raw_offsets, 0, result_buffer_offsets_size);
+    memset(result_buffer_raw_values, 0, result_buffer_values_size);
   } else {
-  da_t device_parquet_address;
-  platform->DeviceMalloc(&device_parquet_address, file_size);
+    platform->DeviceMalloc(&device_parquet_address, file_size);
 
-  // Set all the MMIO registers to their correct value
-  // Add 4 to device_parquet_address to skip magic number
-  setPtoaArguments(platform, num_strings, file_size, device_parquet_address+4);
+    // Set all the MMIO registers to their correct value
+    setPtoaArguments(platform, num_strings, file_size, device_parquet_address);
+  }
   t.stop();
   std::cout << "FPGA Initialize                  : "
             << t.seconds() << std::endl;
@@ -248,16 +259,14 @@ int main(int argc, char **argv) {
   t.stop();
   std::cout << "FPGA host to device copy         : "
             << t.seconds() << std::endl;
-  }
 
   /*************************************************************
   * FPGA processing
   *************************************************************/
 
-  kernel.Reset();
   t.start();
   kernel.Start();
-  kernel.WaitForFinish(100);
+  kernel.WaitForFinish(1);
   t.stop();
   std::cout << "FPGA processing time             : "
             << t.seconds() << std::endl;
@@ -266,10 +275,7 @@ int main(int argc, char **argv) {
   * FPGA device to host copy
   *************************************************************/
 
-  auto result_array = std::dynamic_pointer_cast<arrow::StringArray>(arrow_rb_fpga->column(0));
   t.start();
-  auto result_buffer_raw_offsets = result_array->value_offsets()->mutable_data();
-  auto result_buffer_raw_values = result_array->value_data()->mutable_data();
 
   platform->CopyDeviceToHost(context->device_buffer(0).device_address,
   						 result_buffer_raw_offsets,
