@@ -84,14 +84,17 @@ void setPtoaArguments(std::shared_ptr<fletcher::Platform> platform, uint32_t num
   return;
 }
 
-void checkMMIO(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val,
-		uint64_t max_size, da_t device_parquet_address, da_t device_arrow_address) {
-  uint64_t value64;
+void checkMMIO(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val) {
   uint32_t value32;
 
-  platform->ReadMMIO(2, &value32);
+  platform->ReadMMIO(REG_BASE + 0, &value32);
 
   std::cout << "MMIO num_val=" << value32 << ", should be " << num_val << std::endl;
+
+  for (int i = 0; i < 16; i++) {
+    platform->ReadMMIO(i, &value32);
+  }
+
 
 }
 
@@ -99,7 +102,14 @@ void checkMMIO(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val,
 //Only works for Parquet version 1 style files.
 std::shared_ptr<arrow::ChunkedArray> readArray(std::string hw_input_file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
-  arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool(), &infile);
+  arrow::Result<std::shared_ptr<arrow::io::ReadableFile>> result = arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool());
+  if (result.ok()) {
+    infile = result.ValueOrDie();
+  } else {
+	  printf("Error opening Parquet file: code %d, error message: %s\n",
+			  result.status().code(), result.status().message().c_str());
+	  exit(-1);
+  }
   
   std::unique_ptr<parquet::arrow::FileReader> reader;
   parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
@@ -158,17 +168,17 @@ int main(int argc, char **argv) {
   //Get filesize
   parquet_file.seekg (0, parquet_file.end);
   file_size = parquet_file.tellg();
-  parquet_file.seekg (0, parquet_file.beg);
+  parquet_file.seekg (4, parquet_file.beg); //Skip past Parquet magic number
 
   //Read file data
   //file_data = (uint8_t*)std::malloc(file_size);
-  posix_memalign((void**)&file_data, 4096, file_size);
-  parquet_file.read((char *)file_data, file_size);
+  posix_memalign((void**)&file_data, 4096, file_size - 4);
+  parquet_file.read((char *)file_data, file_size - 4);
   unsigned int checksum = 0;
-  for (int i = 0; i< file_size; i++) {
-	  checksum += file_data[i];
+  for (int i = 0; i < file_size; i++) {
+    checksum += file_data[i];
   }
-  printf("File checksum 0x%lu", checksum);
+  printf("Parquet file checksum 0x%lu\n", checksum);
 
   /*************************************************************
   * FPGA RecordBatch preparation
@@ -181,7 +191,7 @@ int main(int argc, char **argv) {
             << t.seconds() << std::endl;
   auto result_array = std::dynamic_pointer_cast<arrow::Int64Array>(arrow_rb_fpga->column(0));
   auto result_buffer_raw_data = result_array->values()->mutable_data();
-  int outbuf_size = result_array->values()->size();
+  auto result_buffer_size = result_array->values()->size();
 
   /*************************************************************
   * FPGA Initilialization
@@ -196,54 +206,48 @@ int main(int argc, char **argv) {
    fletcher::Context::Make(&context, platform);
 
    fletcher::Kernel kernel(context);
+   kernel.Reset();
 
    //Setup destination recordbatch on device
    context->QueueRecordBatch(arrow_rb_fpga);
    context->Enable();
 
   //Malloc parquet file on device
+   da_t device_parquet_address;
    if (strcmp("oc-accel", platform->name().c_str()) == 0
    		  || strcmp("snap", platform->name().c_str()) == 0) {
        printf("Platform [%s]: Skipping device buffer allocation and host to device copy.\n",
        		platform->name().c_str());
        // Set all the MMIO registers to their correct value
-       // Add 4 to device_parquet_address to skip magic number
-       setPtoaArguments(platform, num_val, file_size, (da_t)(file_data+4));
-       memset(file_data, 0, outbuf_size); //to prevent FPGA card from experiencing TLB misses
-       t.stop();
+       setPtoaArguments(platform, num_val, file_size, (da_t)(file_data));
+	memset(result_buffer_raw_data, 0, result_buffer_size);
      } else {
-       da_t device_parquet_address;
        platform->DeviceMalloc(&device_parquet_address, file_size);
 
        // Set all the MMIO registers to their correct value
-       // Add 4 to device_parquet_address to skip magic number
-       setPtoaArguments(platform, num_val, file_size, device_parquet_address+4);
-       t.stop();
-       std::cout << "FPGA Initialize                  : "
-                 << t.seconds() << std::endl;
+       setPtoaArguments(platform, num_val, file_size, device_parquet_address);
+    }
+  t.stop();
+  std::cout << "FPGA Initialize                  : "
+               << t.seconds() << std::endl;
+  checkMMIO(platform, num_val);
+  /*************************************************************
+  * FPGA host to device copy
+  *************************************************************/
 
-       checkMMIO(platform, num_val, file_size, device_parquet_address,
-     		  context->device_buffer(0).device_address);
-
-       /*************************************************************
-       * FPGA host to device copy
-       *************************************************************/
-
-       t.start();
-       platform->CopyHostToDevice(file_data, device_parquet_address, file_size);
-       t.stop();
-       std::cout << "FPGA host to device copy         : "
-                 << t.seconds() << std::endl;
-     }
+  t.start();
+  platform->CopyHostToDevice(file_data, device_parquet_address, file_size);
+  t.stop();
+  std::cout << "FPGA host to device copy         : "
+              << t.seconds() << std::endl;
 
   /*************************************************************
   * FPGA processing
   *************************************************************/
 
   t.start();
-  kernel.Reset();
   kernel.Start();
-  kernel.WaitForFinish(100);
+  kernel.WaitForFinish(1);
   t.stop();
   std::cout << "FPGA processing time             : "
             << t.seconds() << std::endl;
