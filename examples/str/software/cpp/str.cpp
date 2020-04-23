@@ -45,6 +45,8 @@
 // Fletcher
 #include "fletcher/api.h"
 
+#include <timer.h>
+
 #define REG_BASE 10
 
 int min(int a, int b) {
@@ -137,7 +139,7 @@ int main(int argc, char **argv) {
   std::shared_ptr<fletcher::Platform> platform;
   std::shared_ptr<fletcher::Context> context;
 
-  fletcher::Timer t;
+  Timer t;
 
   char* hw_input_file_path;
   char* reference_parquet_file_path;
@@ -224,7 +226,6 @@ int main(int argc, char **argv) {
   fletcher::Kernel kernel(context);
   
   t.start();
-  kernel.Reset();
 
   //Setup destination recordbatch on device
   context->QueueRecordBatch(arrow_rb_fpga);
@@ -266,12 +267,17 @@ int main(int argc, char **argv) {
   * FPGA processing
   *************************************************************/
 
-  t.start();
-  kernel.Start();
-  kernel.WaitForFinish(1);
-  t.stop();
+  for (int i = 0; i < 10; i++) {
+	  kernel.Reset();
+	  t.start();
+	  kernel.Start();
+	  kernel.WaitForFinish(1);
+	  t.stop();
+	  t.record();
+  }
   std::cout << "FPGA processing time             : "
-            << t.seconds() << std::endl;
+            << t.average() << std::endl;
+  t.clear_history();
 
   /*************************************************************
   * FPGA device to host copy
