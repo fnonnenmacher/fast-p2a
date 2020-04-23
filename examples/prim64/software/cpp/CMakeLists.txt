@@ -23,16 +23,9 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native")
 
-set(SOURCES
-		../../../../profiling/utils/timer.cpp
-		prim64.cpp)
-
-set(HEADERS	../../../../profiling/utils/timer.h)
-
 find_library(LIB_ARROW arrow)
 find_library(LIB_PARQUET parquet)
 find_library(LIB_FLETCHER fletcher)
 
-add_executable(prim64 ${HEADERS} ${SOURCES})
-target_include_directories(prim64 PRIVATE ../../../../profiling/utils)
+add_executable(prim64 prim64.cpp)
 target_link_libraries(prim64 ${LIB_PARQUET} ${LIB_ARROW} ${LIB_FLETCHER})
