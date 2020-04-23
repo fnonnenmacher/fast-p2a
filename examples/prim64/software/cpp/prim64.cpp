@@ -197,15 +197,15 @@ int main(int argc, char **argv) {
   * FPGA Initilialization
   *************************************************************/
 
-  t.start();
    // Create and initialize platform
    fletcher::Platform::Make(&platform).ewf("Could not create platform.");
    platform->Init();
 
-   //Create context
+   //Create context and kernel
    fletcher::Context::Make(&context, platform);
-
    fletcher::Kernel kernel(context);
+
+   t.start();
    kernel.Reset();
 
    //Setup destination recordbatch on device
@@ -220,7 +220,6 @@ int main(int argc, char **argv) {
        		platform->name().c_str());
        // Set all the MMIO registers to their correct value
        setPtoaArguments(platform, num_val, file_size, (da_t)(file_data));
-	memset(result_buffer_raw_data, 0, result_buffer_size);
      } else {
        platform->DeviceMalloc(&device_parquet_address, file_size);
 
@@ -231,6 +230,10 @@ int main(int argc, char **argv) {
   std::cout << "FPGA Initialize                  : "
                << t.seconds() << std::endl;
   checkMMIO(platform, num_val);
+
+  // Make sure all buffer memory is allocated
+  memset(result_buffer_raw_data, 0, result_buffer_size);
+
   /*************************************************************
   * FPGA host to device copy
   *************************************************************/

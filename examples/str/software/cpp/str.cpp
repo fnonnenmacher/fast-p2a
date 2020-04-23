@@ -215,15 +215,15 @@ int main(int argc, char **argv) {
   * FPGA Initialization
   *************************************************************/
 
-  t.start();
   // Create and initialize platform
   fletcher::Platform::Make(&platform).ewf("Could not create platform.");
   platform->Init();
 
-  //Create context
+  //Create context and kernel
   fletcher::Context::Make(&context, platform);
-
   fletcher::Kernel kernel(context);
+  
+  t.start();
   kernel.Reset();
 
   //Setup destination recordbatch on device
@@ -238,8 +238,6 @@ int main(int argc, char **argv) {
     		platform->name().c_str());
     // Set all the MMIO registers to their correct value
     setPtoaArguments(platform, num_strings, file_size, (da_t)(file_data));
-    memset(result_buffer_raw_offsets, 0, result_buffer_offsets_size);
-    memset(result_buffer_raw_values, 0, result_buffer_values_size);
   } else {
     platform->DeviceMalloc(&device_parquet_address, file_size);
 
@@ -249,6 +247,10 @@ int main(int argc, char **argv) {
   t.stop();
   std::cout << "FPGA Initialize                  : "
             << t.seconds() << std::endl;
+    
+  // Make sure the buffers are allocated
+  memset(result_buffer_raw_offsets, 0, result_buffer_offsets_size);
+  memset(result_buffer_raw_values, 0, result_buffer_values_size);
 
   /*************************************************************
   * FPGA host to device copy
@@ -301,7 +303,8 @@ int main(int argc, char **argv) {
 	  std::cout << "Test passed!" << std::endl;
   } else {
 	  std::cout << "Test Failed!" << std::endl;
-	  std::cout << "offsets arrays:" << std::endl;
+	/*  
+	std::cout << "offsets arrays:" << std::endl;
 	  std::cout << "correct array: ";
 	  for (int i = 0; i < correct_array->value_offsets()->size(); i++) {
 		  printf("%02x ", correct_array->value_offsets()->data()[i]);
@@ -320,6 +323,7 @@ int main(int argc, char **argv) {
 		  printf("%02x ", result_array->value_data()->data()[i]);
 	  }
 	  std::cout << std::endl;
+*/
   }
   if(result_array->length() != num_strings){
     std::cout << "Number of results differ.\n";
