@@ -324,7 +324,7 @@ int main(int argc, char **argv) {
 	  }
 	  std::cout << std::endl;
 */
-  }
+  
   if(result_array->length() != num_strings){
     std::cout << "Number of results differ.\n";
   }
@@ -343,7 +343,7 @@ int main(int argc, char **argv) {
 	  printf("result_array(%d): [%s], correct_array(%d): [%s]\n", i, result_array->GetString(i).c_str(), i, correct_array->GetString(i).c_str());
 	}
   }
-
+}
   std::free(file_data);
 
   return 0;
