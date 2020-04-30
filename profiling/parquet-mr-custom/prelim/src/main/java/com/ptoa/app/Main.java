@@ -113,7 +113,7 @@ public class Main {
     writerBuilder.withSchema(schema, conf)
                  .withCompressionCodec(CompressionCodecName.UNCOMPRESSED)
                  .withRowGroupSize(Integer.MAX_VALUE)
-//                 .withPageSize(pageSize)
+                 .withPageSize(pageSize)
                  .withPageRowCountLimit(pageSize)
                  .withDictionaryEncoding(false)
                  .withValidation(false)
