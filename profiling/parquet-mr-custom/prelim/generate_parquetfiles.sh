@@ -19,20 +19,20 @@ for datatype in int32 int64 str; do
 	elif [ "$datatype" == "int64" ]; then
 		entrysize=8
 	else
-		entrysize=64
+		entrysize=10
 	fi
     fullsize_entries=$((fulldatasize/entrysize))
 	$parquetwriter $datatype $fullsize_entries 1
-	for exp in $(seq 3 9); do
+	for exp in $(seq 3 10); do
 		size_bytes=$((10**exp))
         size_entries=$((size_bytes/entrysize))
 		echo "Generating $datatype files of size $fulldatasize bytes and pagesize $size_bytes bytes ($size_entries entries)"
 		echo "./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_plain.prq $size_entries plain"
-		echo "./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_delta.prq $size_entries delta"
 		./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_plain.prq $size_entries plain
 		$parquetdebug test_${datatype}_ps${size_bytes}_plain.prq plain
 		mv test_${datatype}_ps${size_bytes}_plain.prq $outdir
 		if [ $datatype != "str" ]; then
+			echo "./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_delta.prq $size_entries delta"
 			./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_delta.prq $size_entries delta
 			$parquetdebug test_${datatype}_ps${size_bytes}_delta.prq delta
 			mv test_${datatype}_ps${size_bytes}_delta.prq $outdir
@@ -41,7 +41,7 @@ for datatype in int32 int64 str; do
 	if [ "$datatype" == "str" ]; then
 		mv test_str.prq $outdir #needed for str, because the cpp lib only supports plain encoding
 	else
-		ln -sf test_${datatype}_ps1000_plain.prq $outdir/test_${datatype}.prq
+		ln -sf test_${datatype}_ps10000_plain.prq $outdir/test_${datatype}.prq
 	fi
 done
 
