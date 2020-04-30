@@ -8,6 +8,7 @@
 fulldatasize=$((10**9)) #1 GBytes of data
 outdir=/data/parquetfiles/new
 parquetwriter=~/workspaces/openCAPI/fast-p2a/software/cpp/test/parquetwriter_test
+parquetdebug=~/workspaces/openCAPI/fast-p2a/profiling/cpp-benchmarks/pagecounter/debug/pagecounter
 
 rm *.prq
 mkdir $outdir
@@ -29,9 +30,11 @@ for datatype in int32 int64 str; do
 		echo "./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_plain.prq $size_entries plain"
 		echo "./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_delta.prq $size_entries delta"
 		./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_plain.prq $size_entries plain
+		$parquetdebug test_${datatype}_ps${size_bytes}_plain.prq plain
 		mv test_${datatype}_ps${size_bytes}_plain.prq $outdir
 		if [ $datatype != "str" ]; then
 			./run.sh test_${datatype}.prq test_${datatype}_ps${size_bytes}_delta.prq $size_entries delta
+			$parquetdebug test_${datatype}_ps${size_bytes}_delta.prq delta
 			mv test_${datatype}_ps${size_bytes}_delta.prq $outdir
 		fi
 	done
