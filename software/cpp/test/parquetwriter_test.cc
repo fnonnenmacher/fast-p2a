@@ -32,6 +32,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <cmath>
 
 #define NAMEBUFSIZE 64
 
@@ -50,7 +51,7 @@ std::string gen_random_string(const int length) {
     return result;
 }
 
-std::shared_ptr<arrow::Table> generate_int64_table(int num_values, int nCols, bool sequential) {
+std::shared_ptr<arrow::Table> generate_int64_table(int num_values, int nCols, bool deltaVaried) {
     //Create the schema
 	std::vector<std::shared_ptr<arrow::Field>> fields;
     for (int c = 0; c < nCols; c++) {
@@ -64,10 +65,14 @@ std::shared_ptr<arrow::Table> generate_int64_table(int num_values, int nCols, bo
     std::vector<std::shared_ptr<arrow::Array>> arrays;
     for (int c = 0; c < nCols; c++) {
 		arrow::Int64Builder i64builder;
+		long modulo = std::pow(2, (rand() % 63));
 		for (int i = 0; i < num_values; i++) {
 			long number;
-			if (sequential) {
-				number = i;
+			if (deltaVaried) {
+				number = (((long)rand() << 32) | rand()) % modulo;
+				if ((i % 256) == 0) {
+					modulo = std::pow(2, (rand() % 63));
+				}
 			} else {
 				number = ((long)rand() << 32) | rand();
 			}
@@ -82,7 +87,7 @@ std::shared_ptr<arrow::Table> generate_int64_table(int num_values, int nCols, bo
     return arrow::Table::Make(schema, arrays);
 }
 
-std::shared_ptr<arrow::Table> generate_int32_table(int num_values, int nCols, bool sequential) {
+std::shared_ptr<arrow::Table> generate_int32_table(int num_values, int nCols, bool deltaVaried) {
 	//Create the schema
 	std::vector<std::shared_ptr<arrow::Field>> fields;
     for (int c = 0; c < nCols; c++) {
@@ -96,10 +101,14 @@ std::shared_ptr<arrow::Table> generate_int32_table(int num_values, int nCols, bo
     std::vector<std::shared_ptr<arrow::Array>> arrays;
     for (int c = 0; c < nCols; c++) {
 		arrow::Int32Builder i32builder;
+		long modulo = std::pow(2, (rand() % 31));
 		for (int i = 0; i < num_values; i++) {
-			int number;
-			if (sequential) {
-				number = i;
+			long number;
+			if (deltaVaried) {
+				number = rand() % modulo;
+				if ((i % 256) == 0) {
+					modulo = std::pow(2, (rand() % 31));
+				}
 			} else {
 				number = rand();
 			}
@@ -136,8 +145,6 @@ std::shared_ptr<arrow::Table> generate_str_table(int num_values, int nCols, int 
 		PARQUET_THROW_NOT_OK(strbuilder.Finish(&strarray));
 		arrays.push_back(strarray);
     }
-
-
     return arrow::Table::Make(schema, arrays);
 }
 
@@ -172,6 +179,7 @@ void write_parquet(std::shared_ptr<arrow::Table> table, std::string name) {
 }
 
 int main(int argc, char **argv) {
+	srand(123);
 	int nRows = 100;
 	int nCols = 1;
 	enum Datatype {int32, int64, str};
@@ -200,17 +208,17 @@ int main(int argc, char **argv) {
   if (datatype == int32) {
 	//  std::shared_ptr<arrow::Table> test_int32stable = generate_int32_table(nRows, nCols, true);
 	//  write_parquet(test_int32stable, "./test_int32s");
-	  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(nRows, nCols, false);
+	  std::shared_ptr<arrow::Table> test_int32rtable = generate_int32_table(nRows, nCols, true);
 	  write_parquet(test_int32rtable, "./test_int32");
   }
   if (datatype == int64) {
 	//  std::shared_ptr<arrow::Table> test_int64stable = generate_int64_table(nRows, nCols, true);
 	//  write_parquet(test_int64stable, "./test_int64s");
-	  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(nRows, nCols, false);
+	  std::shared_ptr<arrow::Table> test_int64rtable = generate_int64_table(nRows, nCols, true);
 	  write_parquet(test_int64rtable, "./test_int64");
   }
   if (datatype == str) {
-	  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(nRows, nCols, 2, 128);
+	  std::shared_ptr<arrow::Table> test_strtable = generate_str_table(nRows, nCols, 1, 12);
 	  write_parquet(test_strtable, "./test_str");
   }
 
