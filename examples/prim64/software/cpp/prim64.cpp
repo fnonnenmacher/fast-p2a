@@ -91,7 +91,7 @@ void checkMMIO(std::shared_ptr<fletcher::Platform> platform, uint32_t num_val) {
 
   std::cout << "MMIO num_val=" << value32 << ", should be " << num_val << std::endl;
 
-  for (int i = 0; i < 16; i++) {
+  for (int i = 0; i < 15; i++) {
     platform->ReadMMIO(i, &value32);
   }
 
