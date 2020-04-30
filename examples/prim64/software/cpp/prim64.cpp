@@ -278,24 +278,30 @@ int main(int argc, char **argv) {
 
   auto correct_array = std::dynamic_pointer_cast<arrow::Int64Array>(readArray(
 		  std::string(reference_parquet_file_path))->chunk(0));
-  int error_count = 0;
-  for(int i=0; i<result_array->length(); i++) {
-    if(result_array->Value(i) != correct_array->Value(i)) {
-      error_count++;
-    }
-    if(i<20) {
-      std::cout << result_array->Value(i) << " " << correct_array->Value(i) << std::endl;
-    }
-  }
-
-  if(result_array->length() != num_val){
-    error_count++;
-  }
-
-  if(error_count == 0) {
+  if (result_array->Equals(correct_array)) {
     std::cout << "Test passed!" << std::endl;
   } else {
-    std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
+	//sometimes, Equals() thinks it failed but checking the arrays does not show errors
+	//std::cout << "Test Failed!" << std::endl;
+    int error_count = 0;
+    for(int i=0; i<result_array->length(); i++) {
+      if(result_array->Value(i) != correct_array->Value(i)) {
+        error_count++;
+      }
+      if(i<20) {
+        std::cout << result_array->Value(i) << " " << correct_array->Value(i) << std::endl;
+      }
+    }
+
+    if(result_array->length() != num_val){
+      error_count++;
+    }
+
+    if(error_count == 0) {
+      std::cout << "Test passed!" << std::endl;
+    } else {
+      std::cout << "Test failed. Found " << error_count << " errors in the output Arrow array" << std::endl;
+    }
   }
 
   std::free(file_data);
