@@ -25,7 +25,7 @@
 class Timer {
   using system_clock = std::chrono::system_clock;
   using nanoseconds = std::chrono::nanoseconds;
-  using time_point = std::chrono::time_point<system_clock, nanoseconds>;
+  using time_point = std::chrono::high_resolution_clock::time_point;
   using duration = std::chrono::duration<double>;
 
   private:

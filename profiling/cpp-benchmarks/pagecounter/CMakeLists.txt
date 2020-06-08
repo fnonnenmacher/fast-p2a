@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 project(main)
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -fPIC -Ofast -march=native")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -fPIC -Ofast -march=native -I/usr/local/include --std=c++11 -mmacosx-version-min=10.9")
 
 set(PAGECOUNTER pagecounter)
 

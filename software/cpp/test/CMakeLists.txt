@@ -20,6 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 project(parquetwriter_test)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -fPIC -Ofast -march=native -I/usr/local/include --std=c++11 -mmacosx-version-min=10.9")
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -30,3 +31,7 @@ add_executable(parquetwriter_test "./parquetwriter_test.cc")
 add_executable(parquet_debugprint "./parquet_debugprint.cc")
 target_link_libraries(parquetwriter_test ${LIB_PARQUET} ${LIB_ARROW})
 target_link_libraries(parquet_debugprint ${LIB_PARQUET} ${LIB_ARROW})
+
+cmake_minimum_required(VERSION 3.10)
+
+project(main)

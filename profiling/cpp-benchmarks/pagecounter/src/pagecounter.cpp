@@ -24,7 +24,7 @@
 //Only works for Parquet version 1 style files.
 std::shared_ptr<arrow::Array> readArray(std::string hw_input_file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
-  PARQUET_THROW_NOT_OK(arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool(), &infile));
+  PARQUET_ASSIGN_OR_THROW(infile ,arrow::io::ReadableFile::Open(hw_input_file_path, arrow::default_memory_pool()));
   
   std::unique_ptr<parquet::arrow::FileReader> reader;
   PARQUET_THROW_NOT_OK(parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
